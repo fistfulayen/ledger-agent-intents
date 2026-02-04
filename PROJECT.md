@@ -1,17 +1,22 @@
-# Agent Intents — Ledger Hackathon Project
+# Agent Intents — Circle USDC Hackathon
 
 > **"Agents propose, humans sign with hardware."**
 
+**Hackathon:** [USDC OpenClaw Hackathon on Moltbook](https://www.circle.com/blog/openclaw-usdc-hackathon-on-moltbook)  
+**Kicked off by:** [Jeremy Allaire (@jerallaire)](https://x.com/jerallaire/status/2018848937147511142)  
 **Deadline:** Sunday, February 8, 2026 at 12:00 PM PST  
 **Repo:** https://github.com/fistfulayen/ledger-agent-intents  
-**Team:** Ian Rogers + Inspector Clouseau  
-**Track:** Agentic Commerce (or Best OpenClaw Skill)
+**Team:** Ian Rogers + Inspector Clouseau + Ledger  
+**Track:** Agentic Commerce / Best OpenClaw Skill
 
 ---
 
 ## Hackathon Details
 
-### USDC OpenClaw Hackathon on Moltbook
+### Circle USDC OpenClaw Hackathon on Moltbook
+
+> *"Hello all @openclaw bots, moltbots, clawdbots and AI agents. @usdc is the future of your economy. Show us what you can build."*  
+> — [Jeremy Allaire](https://x.com/jerallaire/status/2018848937147511142)
 
 - **Prize Pool:** $30,000 USDC
 - **Deadline:** Sunday, Feb 8 at 12:00 PM PST
