@@ -43,7 +43,7 @@ export function Header() {
 				{isConnected ? (
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger asChild>
-							<Button appearance="accent" size="md">
+							<Button appearance="transparent" size="md">
 								{account?.slice(0, 6)}...{account?.slice(-4)}
 							</Button>
 						</DropdownMenu.Trigger>
@@ -63,14 +63,14 @@ export function Header() {
 						</DropdownMenu.Portal>
 					</DropdownMenu.Root>
 				) : (
-					<Button
-						appearance="accent"
-						size="md"
-						onClick={connect}
-						disabled={isConnecting}
-					>
-						{isConnecting ? "Connecting..." : "Connect"}
-					</Button>
+				<Button
+					appearance="transparent"
+					size="md"
+					onClick={connect}
+					disabled={isConnecting}
+				>
+					{isConnecting ? "Connecting..." : "Connect"}
+				</Button>
 				)}
 			</div>
 		</header>

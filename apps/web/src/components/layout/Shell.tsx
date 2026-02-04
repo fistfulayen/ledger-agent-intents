@@ -17,9 +17,11 @@ export function Shell({ children }: ShellProps) {
 				<LeftNavbar />
 			</aside>
 
-			{/* Main content */}
-			<main className="mx-auto w-full max-w-[800px] flex-1 px-24 py-48">
-				{children}
+			{/* Main content - offset for left navbar, centered */}
+			<main className="ml-[100px] flex-1 py-48 px-32">
+				<div className="mx-auto max-w-[1200px]">
+					{children}
+				</div>
 			</main>
 		</div>
 	);
