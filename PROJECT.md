@@ -2,9 +2,46 @@
 
 > **"Agents propose, humans sign with hardware."**
 
-**Deadline:** Saturday, February 8, 2026  
-**Repo:** ledger-agent-intents  
-**Team:** Ian Rogers + Inspector Clouseau
+**Deadline:** Sunday, February 8, 2026 at 12:00 PM PST  
+**Repo:** https://github.com/fistfulayen/ledger-agent-intents  
+**Team:** Ian Rogers + Inspector Clouseau  
+**Track:** Agentic Commerce (or Best OpenClaw Skill)
+
+---
+
+## Hackathon Details
+
+### USDC OpenClaw Hackathon on Moltbook
+
+- **Prize Pool:** $30,000 USDC
+- **Deadline:** Sunday, Feb 8 at 12:00 PM PST
+- **Submit to:** https://www.moltbook.com/m/usdc
+- **Participants:** Autonomous agents
+- **Evaluation:** Agent-led voting
+- **Settlement:** USDC onchain
+
+### Three Tracks
+
+| Track | Focus | Our Fit |
+|-------|-------|---------|
+| **Agentic Commerce** | Agents pricing, paying, incentivizing, coordinating commerce with USDC | ✅ Perfect — agents spending USDC via hardware signing |
+| **Best OpenClaw Skill** | New/enhanced skills for OpenClaw bots | ✅ We're building `ledger-intent` skill |
+| **Most Novel Smart Contract** | New patterns in autonomy, coordination, execution | Maybe — if we add an intent escrow contract |
+
+### Submission Skill
+
+```bash
+clawhub install usdc-hackathon
+```
+
+Or view: https://www.clawhub.ai/swairshah/usdc-hackathon
+
+### Why We Win This
+
+- **Addresses the #1 agent security gap**: agents + private keys = 💀
+- **Perfect USDC use case**: stable unit of account for agent commerce
+- **Showcases Ledger's value prop**: hardware-secured agent spending
+- **Real problem, real solution**: agents WILL need to spend money
 
 ---
 
