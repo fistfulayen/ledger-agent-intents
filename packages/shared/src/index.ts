@@ -31,7 +31,7 @@ export interface TransferIntent {
 	amountWei?: string; // Wei amount for precision
 	recipient: string; // Destination address
 	recipientEns?: string; // ENS name if resolved
-	chainId: number; // e.g., 1 for mainnet, 137 for Polygon
+	chainId: number; // e.g., 11155111 for Sepolia, 84532 for Base Sepolia
 	memo?: string; // Human-readable reason
 }
 
@@ -98,33 +98,89 @@ export interface IntentWebhook {
 	timestamp: string;
 }
 
-// Supported chains and tokens (initial set)
+// =============================================================================
+// Supported Chains (Testnet only for hackathon)
+// =============================================================================
+
 export const SUPPORTED_CHAINS = {
-	1: { name: "Ethereum", symbol: "ETH", explorer: "https://etherscan.io" },
-	137: { name: "Polygon", symbol: "MATIC", explorer: "https://polygonscan.com" },
-	8453: { name: "Base", symbol: "ETH", explorer: "https://basescan.org" },
+	11155111: {
+		name: "Sepolia",
+		symbol: "ETH",
+		explorer: "https://sepolia.etherscan.io",
+	},
+	84532: {
+		name: "Base Sepolia",
+		symbol: "ETH",
+		explorer: "https://sepolia.basescan.org",
+	},
 } as const;
 
+export type SupportedChainId = keyof typeof SUPPORTED_CHAINS;
+
+// =============================================================================
+// Supported Tokens (Testnet USDC addresses)
+// =============================================================================
+
 export const SUPPORTED_TOKENS: Record<
-	number,
+	SupportedChainId,
 	Record<string, { address: string; decimals: number }>
 > = {
-	// Ethereum mainnet
-	1: {
-		USDC: { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", decimals: 6 },
-		USDT: { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", decimals: 6 },
-		DAI: { address: "0x6B175474E89094C44Da98b954EescdeCd73f31F", decimals: 18 },
+	// Sepolia testnet
+	11155111: {
+		USDC: {
+			address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+			decimals: 6,
+		},
 	},
-	// Polygon
-	137: {
-		USDC: { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", decimals: 6 },
-		USDT: { address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", decimals: 6 },
-	},
-	// Base
-	8453: {
-		USDC: { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6 },
+	// Base Sepolia testnet
+	84532: {
+		USDC: {
+			address: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+			decimals: 6,
+		},
 	},
 };
+
+// =============================================================================
+// Explorer URL Helpers
+// =============================================================================
+
+/**
+ * Get the block explorer URL for a transaction hash
+ */
+export function getExplorerTxUrl(chainId: number, txHash: string): string {
+	const chain = SUPPORTED_CHAINS[chainId as SupportedChainId];
+	const explorer = chain?.explorer ?? "https://etherscan.io";
+	return `${explorer}/tx/${txHash}`;
+}
+
+/**
+ * Get the block explorer URL for an address
+ */
+export function getExplorerAddressUrl(chainId: number, address: string): string {
+	const chain = SUPPORTED_CHAINS[chainId as SupportedChainId];
+	const explorer = chain?.explorer ?? "https://etherscan.io";
+	return `${explorer}/address/${address}`;
+}
+
+/**
+ * Check if a chain ID is supported
+ */
+export function isSupportedChain(chainId: number): chainId is SupportedChainId {
+	return chainId in SUPPORTED_CHAINS;
+}
+
+/**
+ * Get chain name by ID, or "Unknown" if not supported
+ */
+export function getChainName(chainId: number): string {
+	const chain = SUPPORTED_CHAINS[chainId as SupportedChainId];
+	return chain?.name ?? "Unknown";
+}
+
+// =============================================================================
+// Utility Functions
+// =============================================================================
 
 // Utility: generate intent ID
 export function generateIntentId(): string {

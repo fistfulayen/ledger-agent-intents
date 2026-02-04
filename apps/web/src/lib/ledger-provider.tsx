@@ -6,6 +6,8 @@ import {
 	useEffect,
 	useState,
 	useCallback,
+	useMemo,
+	useRef,
 	type ReactNode,
 } from "react";
 import type { EIP6963ProviderDetail } from "@ledgerhq/ledger-wallet-provider";
@@ -29,6 +31,10 @@ interface LedgerContextType {
 
 const LedgerContext = createContext<LedgerContextType | null>(null);
 
+// Module-level singleton to prevent re-initialization during HMR
+let ledgerInitialized = false;
+let ledgerCleanupFn: (() => void) | undefined;
+
 export function LedgerProvider({ children }: { children: ReactNode }) {
 	const [provider, setProvider] = useState<EIP6963ProviderDetail | null>(null);
 	const [account, setAccount] = useState<string | null>(null);
@@ -36,46 +42,65 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 	const [isConnecting, setIsConnecting] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
 
+	// Track the provider UUID to avoid re-setting state for the same provider
+	const providerUuidRef = useRef<string | null>(null);
+
 	// Initialize Ledger Button Provider
 	useEffect(() => {
 		if (typeof window === "undefined") return;
 
-		let ledgerCleanup: (() => void) | undefined;
-
-		// Set up provider listener BEFORE initializing - the Ledger Button
-		// dispatches announceProvider immediately during initialization
+		// Set up provider listener - this needs to run on every mount
+		// to update React state when provider announces itself
 		const handleProvider = (e: Event) => {
 			const detail = (e as CustomEvent<EIP6963ProviderDetail>).detail;
 			if (detail.info.name.toLowerCase().includes("ledger")) {
-				setProvider(detail);
+				// Only update state if this is a different provider (by UUID)
+				// This prevents re-renders from repeated announcements
+				if (providerUuidRef.current !== detail.info.uuid) {
+					providerUuidRef.current = detail.info.uuid;
+					setProvider(detail);
+				}
 			}
 		};
 
 		window.addEventListener("eip6963:announceProvider", handleProvider);
 
-		const initProvider = async () => {
-			try {
-				const { initializeLedgerProvider } = await import(
-					"@ledgerhq/ledger-wallet-provider"
-				);
+		// Only initialize the Ledger button once (survives HMR)
+		if (!ledgerInitialized) {
+			ledgerInitialized = true;
 
-				ledgerCleanup = initializeLedgerProvider({
-					target: document.body,
-					floatingButtonPosition: "bottom-right",
-					dAppIdentifier: "agent-intents",
-					apiKey: import.meta.env.VITE_LEDGER_API_KEY || "demo",
-					loggerLevel: "info",
-				});
-			} catch (err) {
-				console.error("Failed to initialize Ledger provider:", err);
-			}
-		};
+			const initProvider = async () => {
+				try {
+					const { initializeLedgerProvider } = await import(
+						"@ledgerhq/ledger-wallet-provider"
+					);
 
-		initProvider();
+					ledgerCleanupFn = initializeLedgerProvider({
+						target: document.body,
+						floatingButtonPosition: "bottom-right",
+						dAppIdentifier: "agent-intents",
+						apiKey: import.meta.env.VITE_LEDGER_API_KEY || "",
+						loggerLevel: "info",
+						devConfig: {
+							stub: {
+								dAppConfig: true,
+							},
+						},
+					});
+				} catch (err) {
+					console.error("Failed to initialize Ledger provider:", err);
+					ledgerInitialized = false; // Allow retry on error
+				}
+			};
+
+			initProvider();
+		}
 
 		return () => {
 			window.removeEventListener("eip6963:announceProvider", handleProvider);
-			ledgerCleanup?.();
+			// Don't cleanup the Ledger button on unmount - it should persist
+			// across HMR and React Strict Mode double-mounting.
+			// The button will be cleaned up when the page is unloaded.
 		};
 	}, []);
 
@@ -165,19 +190,23 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 		[provider, account],
 	);
 
+	// Memoize the context value to prevent unnecessary re-renders of consumers
+	const contextValue = useMemo(
+		() => ({
+			account,
+			chainId,
+			isConnected: !!account,
+			isConnecting,
+			error,
+			connect,
+			disconnect,
+			sendTransaction,
+		}),
+		[account, chainId, isConnecting, error, connect, disconnect, sendTransaction],
+	);
+
 	return (
-		<LedgerContext.Provider
-			value={{
-				account,
-				chainId,
-				isConnected: !!account,
-				isConnecting,
-				error,
-				connect,
-				disconnect,
-				sendTransaction,
-			}}
-		>
+		<LedgerContext.Provider value={contextValue}>
 			{children}
 		</LedgerContext.Provider>
 	);

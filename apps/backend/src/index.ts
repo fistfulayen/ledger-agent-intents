@@ -7,21 +7,29 @@
  * - Status updates when intents are signed/rejected
  */
 
-import type {
-	CreateIntentRequest,
-	Intent,
-	IntentStatus,
-	TransferIntent,
+import {
+	type CreateIntentRequest,
+	type Intent,
+	type IntentStatus,
+	type TransferIntent,
+	getExplorerTxUrl,
 } from "@agent-intents/shared";
 import cors from "cors";
 import express from "express";
 import { v4 as uuidv4 } from "uuid";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3005;
 
-// Middleware
-app.use(cors());
+// Middleware - CORS with explicit configuration for development
+app.use(
+	cors({
+		origin: true, // Reflect the request origin (allows any origin in development)
+		credentials: true,
+		methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+		allowedHeaders: ["Content-Type", "Authorization"],
+	}),
+);
 app.use(express.json());
 
 // In-memory store (replace with DB for production)
@@ -137,14 +145,8 @@ app.patch("/api/intents/:id/status", (req, res) => {
 	} else if (status === "signed" && txHash) {
 		intent.signedAt = now;
 		intent.txHash = txHash;
-		// Generate explorer link based on chain
-		const chainId = intent.details.chainId || 1;
-		const explorers: Record<number, string> = {
-			1: "https://etherscan.io",
-			137: "https://polygonscan.com",
-			8453: "https://basescan.org",
-		};
-		intent.txUrl = `${explorers[chainId] || explorers[1]}/tx/${txHash}`;
+		// Generate explorer link using shared helper
+		intent.txUrl = getExplorerTxUrl(intent.details.chainId, txHash);
 	} else if (status === "confirmed") {
 		intent.confirmedAt = now;
 	} else if (status === "rejected") {
@@ -181,7 +183,7 @@ app.listen(PORT, () => {
 ║                                                           ║
 ║  "Agents propose, humans sign with hardware."             ║
 ║                                                           ║
-║  Server running on http://localhost:${PORT}                  ║
+║  Server running on http://localhost:${PORT}                 ║
 ║                                                           ║
 ║  Endpoints:                                               ║
 ║    POST   /api/intents              Create intent         ║
