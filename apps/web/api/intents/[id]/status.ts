@@ -4,8 +4,8 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { IntentStatus } from "@agent-intents/shared";
-import { methodRouter, jsonSuccess, jsonError, parseBody } from "../../_lib/http";
-import { updateIntentStatus } from "../../_lib/intentsRepo";
+import { methodRouter, jsonSuccess, jsonError, parseBody } from "../../_lib/http.js";
+import { updateIntentStatus } from "../../_lib/intentsRepo.js";
 
 interface UpdateStatusBody {
 	status: IntentStatus;

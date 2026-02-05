@@ -5,8 +5,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { CreateIntentRequest, IntentUrgency } from "@agent-intents/shared";
 import { v4 as uuidv4 } from "uuid";
-import { methodRouter, jsonSuccess, jsonError, parseBody } from "./_lib/http";
-import { createIntent } from "./_lib/intentsRepo";
+import { methodRouter, jsonSuccess, jsonError, parseBody } from "./_lib/http.js";
+import { createIntent } from "./_lib/intentsRepo.js";
 
 export default methodRouter({
 	POST: async (req: VercelRequest, res: VercelResponse) => {

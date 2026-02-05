@@ -3,8 +3,8 @@
  * GET /api/intents/:id
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { methodRouter, jsonSuccess, jsonError } from "../_lib/http";
-import { getIntentById } from "../_lib/intentsRepo";
+import { methodRouter, jsonSuccess, jsonError } from "../_lib/http.js";
+import { getIntentById } from "../_lib/intentsRepo.js";
 
 export default methodRouter({
 	GET: async (req: VercelRequest, res: VercelResponse) => {

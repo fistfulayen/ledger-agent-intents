@@ -8,7 +8,7 @@ import type {
 	IntentUrgency,
 } from "@agent-intents/shared";
 import { getExplorerTxUrl } from "@agent-intents/shared";
-import { sql } from "./db";
+import { sql } from "./db.js";
 
 // Database row types
 interface IntentRow {

@@ -4,8 +4,8 @@
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import type { IntentStatus } from "@agent-intents/shared";
-import { methodRouter, jsonSuccess, getQueryParam, getQueryNumber } from "../../_lib/http";
-import { getIntentsByUser } from "../../_lib/intentsRepo";
+import { methodRouter, jsonSuccess, getQueryParam, getQueryNumber } from "../../_lib/http.js";
+import { getIntentsByUser } from "../../_lib/intentsRepo.js";
 
 const VALID_STATUSES: IntentStatus[] = [
 	"pending",
