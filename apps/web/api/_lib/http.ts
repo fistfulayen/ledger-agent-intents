@@ -16,7 +16,7 @@ export function methodRouter(handlers: RouteHandlers) {
 	return async (req: VercelRequest, res: VercelResponse) => {
 		// Handle CORS preflight
 		if (req.method === "OPTIONS") {
-			setCorsHeaders(res);
+			setCorsHeaders(res, req);
 			res.status(200).end();
 			return;
 		}
@@ -25,7 +25,7 @@ export function methodRouter(handlers: RouteHandlers) {
 		const handler = handlers[method];
 
 		if (!handler) {
-			setCorsHeaders(res);
+			setCorsHeaders(res, req);
 			res.status(405).json({
 				success: false,
 				error: `Method ${method} not allowed`,
@@ -34,7 +34,7 @@ export function methodRouter(handlers: RouteHandlers) {
 		}
 
 		try {
-			setCorsHeaders(res);
+			setCorsHeaders(res, req);
 			await handler(req, res);
 		} catch (error) {
 			console.error(`[API Error] ${method} ${req.url}:`, error);
@@ -49,8 +49,16 @@ export function methodRouter(handlers: RouteHandlers) {
 /**
  * Set CORS headers for responses
  */
-export function setCorsHeaders(res: VercelResponse) {
-	res.setHeader("Access-Control-Allow-Origin", "*");
+export function setCorsHeaders(res: VercelResponse, req?: VercelRequest) {
+	// If the request provides an Origin, reflect it so cookies can be used.
+	// (Access-Control-Allow-Origin cannot be '*' when credentials are included.)
+	const origin = req?.headers?.origin;
+	if (origin) {
+		res.setHeader("Access-Control-Allow-Origin", origin);
+		res.setHeader("Access-Control-Allow-Credentials", "true");
+	} else {
+		res.setHeader("Access-Control-Allow-Origin", "*");
+	}
 	res.setHeader(
 		"Access-Control-Allow-Methods",
 		"GET, POST, PUT, PATCH, DELETE, OPTIONS"

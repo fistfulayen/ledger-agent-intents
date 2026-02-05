@@ -1,0 +1,337 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Ledger Agent Payments API",
+    "version": "0.1.0",
+    "description": "Agent-first API for submitting transaction intents. Agents can propose transactions; humans review and sign on Ledger hardware."
+  },
+  "servers": [
+    { "url": "https://agent-intents-web.vercel.app", "description": "Production (example)" },
+    { "url": "/", "description": "Same-origin (recommended)" }
+  ],
+  "tags": [
+    { "name": "Health" },
+    { "name": "Intents" },
+    { "name": "Users" }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents": {
+      "post": {
+        "tags": ["Intents"],
+        "summary": "Create an intent",
+        "description": "Submit a new transaction intent for human review and hardware signing.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateIntentRequest" },
+              "examples": {
+                "transfer": {
+                  "value": {
+                    "agentId": "podcast-agent",
+                    "agentName": "Podcast Payment Bot",
+                    "userId": "demo-user",
+                    "urgency": "normal",
+                    "expiresInMinutes": 60,
+                    "details": {
+                      "type": "transfer",
+                      "token": "USDC",
+                      "amount": "50",
+                      "recipient": "0x1234567890abcdef1234567890abcdef12345678",
+                      "chainId": 11155111,
+                      "memo": "Payment for services"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IntentResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents/{id}": {
+      "get": {
+        "tags": ["Intents"],
+        "summary": "Get an intent by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IntentResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents/{id}/status": {
+      "patch": {
+        "tags": ["Intents"],
+        "summary": "Update intent status",
+        "description": "Update the status of an intent (typically called by the signing app, not agents).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateIntentStatusRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IntentResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{userId}/intents": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "List intents for a user",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": { "$ref": "#/components/schemas/IntentStatus" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IntentListResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "required": ["success", "status", "timestamp"],
+        "properties": {
+          "success": { "type": "boolean", "const": true },
+          "status": { "type": "string", "examples": ["ok"] },
+          "timestamp": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["success", "error"],
+        "properties": {
+          "success": { "type": "boolean", "const": false },
+          "error": { "type": "string" }
+        }
+      },
+      "IntentUrgency": {
+        "type": "string",
+        "enum": ["low", "normal", "high", "critical"],
+        "default": "normal"
+      },
+      "IntentStatus": {
+        "type": "string",
+        "enum": ["pending", "approved", "rejected", "signed", "authorized", "confirmed", "failed", "expired"]
+      },
+      "TransferIntent": {
+        "type": "object",
+        "required": ["type", "token", "amount", "recipient", "chainId"],
+        "properties": {
+          "type": { "type": "string", "const": "transfer" },
+          "token": { "type": "string", "description": "Token symbol (e.g., USDC, ETH)" },
+          "tokenAddress": { "type": "string", "description": "Optional ERC-20 contract address" },
+          "amount": { "type": "string", "description": "Human-readable amount" },
+          "amountWei": { "type": "string", "description": "Optional amount in wei for precision" },
+          "recipient": { "type": "string", "description": "Destination address (0x...)" },
+          "recipientEns": { "type": "string", "description": "Optional ENS name if resolved" },
+          "chainId": { "type": "integer", "description": "Chain ID (e.g., 11155111 for Sepolia)" },
+          "memo": { "type": "string", "description": "Optional memo/reason" },
+          "x402": {
+            "type": "object",
+            "description": "Optional x402 payment data (demo)",
+            "additionalProperties": true
+          }
+        }
+      },
+      "Intent": {
+        "type": "object",
+        "required": ["id", "userId", "agentId", "agentName", "details", "urgency", "status", "createdAt", "statusHistory"],
+        "properties": {
+          "id": { "type": "string" },
+          "userId": { "type": "string" },
+          "agentId": { "type": "string" },
+          "agentName": { "type": "string" },
+          "details": { "$ref": "#/components/schemas/TransferIntent" },
+          "urgency": { "$ref": "#/components/schemas/IntentUrgency" },
+          "status": { "$ref": "#/components/schemas/IntentStatus" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "reviewedAt": { "type": "string", "format": "date-time" },
+          "signedAt": { "type": "string", "format": "date-time" },
+          "confirmedAt": { "type": "string", "format": "date-time" },
+          "txHash": { "type": "string" },
+          "txUrl": { "type": "string" },
+          "statusHistory": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["status", "timestamp"],
+              "properties": {
+                "status": { "$ref": "#/components/schemas/IntentStatus" },
+                "timestamp": { "type": "string", "format": "date-time" },
+                "note": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "IntentResponse": {
+        "type": "object",
+        "required": ["success", "intent"],
+        "properties": {
+          "success": { "type": "boolean", "const": true },
+          "intent": { "$ref": "#/components/schemas/Intent" }
+        }
+      },
+      "IntentListResponse": {
+        "type": "object",
+        "required": ["success", "intents"],
+        "properties": {
+          "success": { "type": "boolean", "const": true },
+          "intents": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Intent" }
+          }
+        }
+      },
+      "CreateIntentRequest": {
+        "type": "object",
+        "required": ["agentId", "details"],
+        "properties": {
+          "agentId": { "type": "string" },
+          "agentName": { "type": "string" },
+          "userId": { "type": "string", "description": "Hackathon/demo: optional; defaults to 'demo-user' if omitted." },
+          "urgency": { "$ref": "#/components/schemas/IntentUrgency" },
+          "expiresInMinutes": { "type": "integer", "minimum": 1 },
+          "details": { "$ref": "#/components/schemas/TransferIntent" }
+        }
+      },
+      "UpdateIntentStatusRequest": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "$ref": "#/components/schemas/IntentStatus" },
+          "txHash": { "type": "string" },
+          "note": { "type": "string" },
+          "paymentSignatureHeader": { "type": "string", "description": "x402: base64-encoded payment signature header value" },
+          "paymentPayload": { "type": "object", "additionalProperties": true },
+          "settlementReceipt": { "type": "object", "additionalProperties": true }
+        }
+      }
+    }
+  }
+}

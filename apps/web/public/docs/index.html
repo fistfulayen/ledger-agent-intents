@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Ledger Agent Payments API Docs</title>
+		<meta
+			name="description"
+			content="Agent-first documentation for the Ledger Agent Payments API."
+		/>
+		<style>
+			:root {
+				color-scheme: dark;
+				--bg: #0b0f14;
+				--panel: #0f1621;
+				--text: #e6edf3;
+				--muted: #9aa4b2;
+				--border: #223042;
+				--accent: #7c5cff;
+				--good: #2ea043;
+				--warn: #d29922;
+				--bad: #f85149;
+				--mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+					"Liberation Mono", "Courier New", monospace;
+				--sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial,
+					"Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+			}
+			body {
+				margin: 0;
+				font-family: var(--sans);
+				background: var(--bg);
+				color: var(--text);
+				line-height: 1.5;
+			}
+			a {
+				color: var(--accent);
+				text-decoration: none;
+			}
+			a:hover {
+				text-decoration: underline;
+			}
+			.container {
+				max-width: 980px;
+				margin: 0 auto;
+				padding: 32px 16px 80px;
+			}
+			.header {
+				padding: 20px;
+				border: 1px solid var(--border);
+				background: linear-gradient(180deg, rgba(124, 92, 255, 0.12), transparent);
+				border-radius: 12px;
+			}
+			h1 {
+				margin: 0 0 8px;
+				font-size: 28px;
+				letter-spacing: -0.01em;
+			}
+			p {
+				margin: 0;
+			}
+			.meta {
+				margin-top: 10px;
+				color: var(--muted);
+				font-size: 14px;
+			}
+			.grid {
+				display: grid;
+				grid-template-columns: 1fr;
+				gap: 16px;
+				margin-top: 16px;
+			}
+			.card {
+				border: 1px solid var(--border);
+				background: var(--panel);
+				border-radius: 12px;
+				padding: 16px;
+			}
+			hr {
+				border: none;
+				border-top: 1px solid var(--border);
+				margin: 24px 0;
+			}
+			.k {
+				font-family: var(--mono);
+				padding: 2px 6px;
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				background: rgba(255, 255, 255, 0.03);
+				font-size: 12px;
+				white-space: nowrap;
+			}
+			.endpoint {
+				display: flex;
+				gap: 12px;
+				align-items: flex-start;
+			}
+			.method {
+				font-family: var(--mono);
+				font-size: 12px;
+				padding: 3px 8px;
+				border-radius: 999px;
+				border: 1px solid var(--border);
+				background: rgba(255, 255, 255, 0.03);
+				min-width: 64px;
+				text-align: center;
+			}
+			.m-get {
+				color: var(--good);
+			}
+			.m-post {
+				color: var(--accent);
+			}
+			.m-patch {
+				color: var(--warn);
+			}
+			pre {
+				margin: 12px 0 0;
+				padding: 12px;
+				border: 1px solid var(--border);
+				background: rgba(0, 0, 0, 0.25);
+				border-radius: 12px;
+				overflow: auto;
+				font-family: var(--mono);
+				font-size: 12px;
+			}
+			.small {
+				font-size: 13px;
+				color: var(--muted);
+				margin-top: 8px;
+			}
+			ul {
+				margin: 8px 0 0;
+				padding-left: 18px;
+			}
+			.footer {
+				margin-top: 28px;
+				color: var(--muted);
+				font-size: 13px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">
+				<h1>Ledger Agent Payments API</h1>
+				<p>
+					Agent-first docs for submitting transaction intents. Humans review and sign
+					on Ledger hardware.
+				</p>
+				<div class="meta">
+					OpenAPI: <a href="/openapi.json"><span class="k">/openapi.json</span></a>
+					&nbsp;•&nbsp; Health:
+					<a href="/api/health"><span class="k">/api/health</span></a>
+				</div>
+			</div>
+
+			<div class="grid">
+				<div class="card">
+					<h2 style="margin: 0 0 6px; font-size: 18px">Quick start</h2>
+					<p class="small">
+						Use same-origin URLs on Vercel (recommended). For local dev, point to your
+						dev server domain.
+					</p>
+					<pre><code>curl -sS -X POST /api/intents \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agentId": "podcast-agent",
+    "agentName": "Podcast Payment Bot",
+    "userId": "demo-user",
+    "details": {
+      "type": "transfer",
+      "token": "USDC",
+      "amount": "50",
+      "recipient": "0x1234567890abcdef1234567890abcdef12345678",
+      "chainId": 11155111,
+      "memo": "Payment for services"
+    }
+  }'</code></pre>
+				</div>
+
+				<div class="card">
+					<h2 style="margin: 0 0 6px; font-size: 18px">Endpoints</h2>
+
+					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-get">GET</div>
+						<div>
+							<div><span class="k">/api/health</span></div>
+							<div class="small">Health check.</div>
+						</div>
+					</div>
+
+					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-post">POST</div>
+						<div>
+							<div><span class="k">/api/intents</span></div>
+							<div class="small">Create an intent.</div>
+						</div>
+					</div>
+
+					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-get">GET</div>
+						<div>
+							<div><span class="k">/api/intents/:id</span></div>
+							<div class="small">Get an intent by ID.</div>
+						</div>
+					</div>
+
+					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-patch">PATCH</div>
+						<div>
+							<div><span class="k">/api/intents/:id/status</span></div>
+							<div class="small">Update intent status (signing app).</div>
+						</div>
+					</div>
+
+					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-get">GET</div>
+						<div>
+							<div><span class="k">/api/users/:userId/intents</span></div>
+							<div class="small">
+								List intents for a user. Optional query: <span class="k">status</span>,
+								<span class="k">limit</span>.
+							</div>
+						</div>
+					</div>
+
+					<hr />
+					<div class="small">
+						Supported statuses:
+						<span class="k">pending</span> <span class="k">approved</span>
+						<span class="k">rejected</span> <span class="k">signed</span>
+						<span class="k">authorized</span> <span class="k">confirmed</span>
+						<span class="k">failed</span> <span class="k">expired</span>
+					</div>
+				</div>
+
+				<div class="card">
+					<h2 style="margin: 0 0 6px; font-size: 18px">For agents/tools</h2>
+					<ul>
+						<li>
+							Prefer <span class="k">/openapi.json</span> for machine-readable docs.
+						</li>
+						<li>
+							This <span class="k">/docs</span> page is static HTML (no JavaScript
+							required), so “fetch-only” tools can read it.
+						</li>
+						<li>
+							If you see HTML where JSON is expected, your deployment rewrote
+							<span class="k">/api/*</span> to <span class="k">/index.html</span>.
+						</li>
+					</ul>
+				</div>
+			</div>
+
+			<div class="footer">
+				If you’re looking for the web UI app, go to <a href="/"><span class="k">/</span></a
+				>.
+			</div>
+		</div>
+	</body>
+</html>

@@ -1,4 +1,5 @@
 import { useLedger } from "@/lib/ledger-provider";
+import { useWalletAuth } from "@/lib/wallet-auth";
 import { intentsQueryOptions } from "@/queries/intents";
 import type { Intent } from "@agent-intents/shared";
 import { AmountDisplay, type FormattedValue } from "@ledgerhq/lumen-ui-react";
@@ -52,14 +53,15 @@ const usdcFormatter = (value: number): FormattedValue => {
 
 export function IntentList() {
 	const { account, isConnected } = useLedger();
+	const { status: authStatus, error: authError } = useWalletAuth();
 
 	const {
 		data: intents,
 		isLoading,
 		error,
 	} = useQuery({
-		...intentsQueryOptions(account ?? ""),
-		enabled: isConnected && !!account,
+		...intentsQueryOptions(account?.toLowerCase() ?? ""),
+		enabled: isConnected && !!account && authStatus === "authed",
 	});
 
 	// Sort intents if we have them
@@ -103,6 +105,11 @@ export function IntentList() {
 			</div>
 
 			{/* Error display */}
+			{authError && (
+				<div className="rounded-md bg-error-transparent px-16 py-12 body-2 text-error">
+					Authentication failed: {authError.message}
+				</div>
+			)}
 			{error && (
 				<div className="rounded-md bg-error-transparent px-16 py-12 body-2 text-error">
 					Failed to load intents: {error.message}
