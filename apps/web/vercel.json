@@ -1,6 +1,7 @@
 {
 	"$schema": "https://openapi.vercel.sh/vercel.json",
-	"buildCommand": "pnpm build",
-	"outputDirectory": "dist",
-	"framework": "vite"
+	"framework": "vite",
+	"installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+	"buildCommand": "cd ../.. && pnpm -w turbo run build --filter=@agent-intents/web...",
+	"outputDirectory": "dist"
 }

@@ -1,7 +1,8 @@
 import type { Intent, IntentStatus } from "@agent-intents/shared";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:3005";
+// Use same-origin API on Vercel; fallback to local backend in development
+const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
 
 // =============================================================================
 // Query Options
@@ -15,12 +16,14 @@ export function intentsQueryOptions(userId: string, status?: IntentStatus) {
 	return queryOptions({
 		queryKey: ["intents", userId, status] as const,
 		queryFn: async (): Promise<Intent[]> => {
-			const url = new URL(`${API_BASE}/api/users/${userId}/intents`);
+			const params = new URLSearchParams();
 			if (status) {
-				url.searchParams.set("status", status);
+				params.set("status", status);
 			}
+			const queryString = params.toString();
+			const url = `${API_BASE}/api/users/${userId}/intents${queryString ? `?${queryString}` : ""}`;
 
-			const res = await fetch(url.toString());
+			const res = await fetch(url);
 			if (!res.ok) {
 				throw new Error(`Failed to fetch intents: ${res.statusText}`);
 			}
@@ -29,6 +32,7 @@ export function intentsQueryOptions(userId: string, status?: IntentStatus) {
 			return data.intents;
 		},
 		refetchInterval: 5000, // Poll every 5 seconds
+		refetchIntervalInBackground: false, // Disable background polling to reduce costs
 		staleTime: 2000, // Consider data stale after 2 seconds
 	});
 }

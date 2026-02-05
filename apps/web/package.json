@@ -7,10 +7,12 @@
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"db:migrate": "psql $POSTGRES_URL_NON_POOLING -f db/migrations/001_initial_schema.sql"
 	},
 	"dependencies": {
 		"@agent-intents/shared": "workspace:*",
+		"@vercel/postgres": "^0.10.0",
 		"@ledgerhq/ledger-wallet-provider": "workspace:*",
 		"@ledgerhq/lumen-design-core": "^0.0.46",
 		"@ledgerhq/lumen-ui-react": "^0.0.76",
@@ -24,9 +26,11 @@
 		"react-dom": "^19.0.0",
 		"shiki": "^3.22.0",
 		"tailwind-merge": "^2.6.0",
+		"uuid": "^9.0.0",
 		"viem": "^2.21.0"
 	},
 	"devDependencies": {
+		"@types/uuid": "^9.0.7",
 		"@tanstack/router-plugin": "^1.120.0",
 		"@types/react": "^19.0.0",
 		"@types/react-dom": "^19.0.0",

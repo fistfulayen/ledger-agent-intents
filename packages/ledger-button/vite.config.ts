@@ -4,11 +4,14 @@ import dts from "vite-plugin-dts";
 export default defineConfig(({ command }) => ({
 	assetsInclude: ["**/*.png", "**/*.svg", "**/*.jpg", "**/*.jpeg", "**/*.gif"],
 	plugins: [
-		// Only generate types during build, not in watch mode
-		command === "build" && !process.argv.includes("--watch") &&
-		dts({
-			entryRoot: "src",
-		}),
+		// Generate types during build (not in dev/serve mode)
+		command === "build" &&
+			dts({
+				entryRoot: "src",
+				outDir: "dist",
+				tsconfigPath: "./tsconfig.json",
+				insertTypesEntry: true,
+			}),
 	].filter(Boolean),
 	css: {
 		postcss: "./postcss.config.js",
