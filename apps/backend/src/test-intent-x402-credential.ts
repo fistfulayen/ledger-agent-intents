@@ -36,7 +36,7 @@ import type {
 // Configuration
 // =============================================================================
 
-const API_BASE = process.env.API_URL || "http://localhost:3005";
+const API_BASE = (process.env.API_URL || "http://localhost:3005").replace(/\/+$/, "");
 const AMOUNT = process.env.AMOUNT || "0.01";
 const RESOURCE_URL =
 	process.env.RESOURCE_URL || "https://api.example.com/v1/ai/completion";

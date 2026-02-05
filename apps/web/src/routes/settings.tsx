@@ -10,6 +10,7 @@ import {
 	buildAuthorizationMessage,
 	type AgentKeyMaterial,
 } from "@/lib/agent-keys";
+import { privateKeyToAccount } from "viem/accounts";
 import { agentsQueryOptions, useRegisterAgent, useRevokeAgent } from "@/queries/agents";
 import { cn, formatAddress, formatTimeAgo } from "@/lib/utils";
 import { Spinner } from "@/components/ui/Spinner";
@@ -232,11 +233,17 @@ function ProvisionAgentForm(props: {
 			const km = await generateAgentKeyPair();
 			setKeyMaterial(km);
 
+			// Derive the Ethereum address from the private key.
+			// The backend auth flow recovers an Ethereum address from signatures,
+			// so we must register the address (not the raw compressed pubkey).
+			const viemAccount = privateKeyToAccount(km.privateKeyHex as `0x${string}`);
+			const agentAddress = viemAccount.address.toLowerCase();
+
 			// 2. Ask user to authorize on Ledger device (EIP-191 personal_sign)
 			setStep("signing");
 			const agentLabel = label || "Unnamed Agent";
 			const authMessage = buildAuthorizationMessage({
-				agentPublicKey: km.publicKeyHex,
+				agentPublicKey: agentAddress,
 				agentLabel,
 				trustchainId,
 			});
@@ -249,7 +256,7 @@ function ProvisionAgentForm(props: {
 			await registerAgent.mutateAsync({
 				trustChainId: trustchainId,
 				agentLabel,
-				agentPublicKey: km.publicKeyHex,
+				agentPublicKey: agentAddress,
 				authorizationSignature: signature,
 			});
 
