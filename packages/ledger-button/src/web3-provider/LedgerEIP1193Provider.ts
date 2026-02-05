@@ -643,8 +643,16 @@ export class LedgerEIP1193Provider
   // Private method to execute request logic
   private async executeRequest({ method, params }: RequestArguments) {
     if (method in this.handlers) {
+      // EIP-1193 params may be `undefined` or an object; normalize to an array
+      // since our handlers expect array-style positional params.
+      const normalizedParams: unknown[] = Array.isArray(params)
+        ? (params as unknown[])
+        : params == null
+          ? []
+          : [params];
+
       const res = await this.handlers[method as keyof typeof this.handlers](
-        params as unknown[],
+        normalizedParams,
         method,
       );
 
