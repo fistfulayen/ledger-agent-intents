@@ -883,7 +883,7 @@ function IntentActions({ intent, onClose }: IntentActionsProps) {
 				appearance="gray"
 				onClick={handleReject}
 				disabled={isSigning || isRejecting}
-				className="flex-1"
+				isFull
 			>
 				{isRejecting ? <Spinner size="sm" /> : "Reject"}
 			</Button>
@@ -891,12 +891,12 @@ function IntentActions({ intent, onClose }: IntentActionsProps) {
 				appearance="base"
 				onClick={handleSign}
 				disabled={isSigning || isRejecting || isEffectiveWrongChain}
-				className="flex-1"
+				isFull
 			>
 				{isSigning ? (
 					<Spinner size="sm" />
 				) : isX402 ? (
-					"Authorize Payment"
+					"Authorize"
 				) : (
 					"Sign with Ledger"
 				)}
