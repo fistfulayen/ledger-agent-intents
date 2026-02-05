@@ -24,12 +24,12 @@ export function useWalletAuth(): { status: AuthStatus; error: Error | null } {
 	// This prevents infinite retries against `/api/auth/challenge` in production.
 	//
 	// Re-enable later by removing this early return and reinstating the flow below.
-	const { isConnected, account } = useLedger();
-	if (isConnected && account) {
+	const ledger = useLedger();
+	if (ledger.isConnected && ledger.account) {
 		return { status: "authed", error: null };
 	}
 
-	const { account, chainId, isConnected, signTypedDataV4 } = useLedger();
+	const { account, chainId, isConnected, signTypedDataV4 } = ledger;
 	const [status, setStatus] = useState<AuthStatus>("idle");
 	const [error, setError] = useState<Error | null>(null);
 	const inFlightRef = useRef(false);
