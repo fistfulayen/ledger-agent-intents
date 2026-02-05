@@ -27,6 +27,7 @@ interface LedgerContextType {
 	connect: () => Promise<void>;
 	disconnect: () => void;
 	sendTransaction: (tx: TransactionRequest) => Promise<string>;
+	signTypedDataV4: (typedData: unknown) => Promise<string>;
 	openLedgerModal: () => void;
 }
 
@@ -240,6 +241,21 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 		[provider, account],
 	);
 
+	const signTypedDataV4 = useCallback(
+		async (typedData: unknown): Promise<string> => {
+			if (!provider) throw new Error("No provider available");
+			if (!account) throw new Error("Not connected");
+
+			const signature = (await provider.provider.request({
+				method: "eth_signTypedData_v4",
+				params: [account, JSON.stringify(typedData)],
+			})) as string;
+
+			return signature;
+		},
+		[provider, account],
+	);
+
 	// Memoize the context value to prevent unnecessary re-renders of consumers
 	const contextValue = useMemo(
 		() => ({
@@ -251,9 +267,20 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			connect,
 			disconnect,
 			sendTransaction,
+			signTypedDataV4,
 			openLedgerModal,
 		}),
-		[account, chainId, isConnecting, error, connect, disconnect, sendTransaction, openLedgerModal],
+		[
+			account,
+			chainId,
+			isConnecting,
+			error,
+			connect,
+			disconnect,
+			sendTransaction,
+			signTypedDataV4,
+			openLedgerModal,
+		],
 	);
 
 	return (

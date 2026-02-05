@@ -34,13 +34,15 @@ export function IntentDetailDialog({
 	if (!intent) return null;
 
 	const handleClose = () => onOpenChange(false);
+	const isX402 = !!intent.details.x402?.accepted;
+	const dialogTitle = isX402 ? "Authorize API Payment" : "Review Transfer";
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent>
 				<DialogHeader
 					appearance="compact"
-					title="Review Transfer"
+					title={dialogTitle}
 					onClose={handleClose}
 				/>
 				<DialogBody>

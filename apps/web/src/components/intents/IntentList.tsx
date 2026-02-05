@@ -36,7 +36,7 @@ function calculatePendingTotal(intents: Intent[]): number {
  * Format amount for AmountDisplay component
  */
 const usdcFormatter = (value: number): FormattedValue => {
-	const [integerPart, decimalPart = "00"] = value.toFixed(2).split(".");
+	const [integerPart = "0", decimalPart = "00"] = value.toFixed(2).split(".");
 	return {
 		integerPart,
 		decimalPart,

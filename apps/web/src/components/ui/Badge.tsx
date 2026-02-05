@@ -15,6 +15,7 @@ const badgeVariants = cva(
 				pending: "bg-warning text-warning",
 				approved: "bg-interactive text-interactive",
 				signed: "bg-interactive text-interactive",
+				authorized: "bg-success text-success", // x402 payment authorized
 				confirmed: "bg-success text-success",
 				rejected: "bg-error text-error",
 				failed: "bg-error text-error",
@@ -64,6 +65,7 @@ const statusBadgeVariants = cva(
 				pending: "bg-warning-strong/25 text-warning",
 				approved: "bg-accent/25 text-interactive",
 				signed: "bg-accent/25 text-interactive",
+				authorized: "bg-success-strong/25 text-success", // x402 payment authorized
 				confirmed: "bg-success-strong/25 text-success",
 				rejected: "bg-error-strong/25 text-error",
 				failed: "bg-error-strong/25 text-error",
@@ -80,6 +82,7 @@ const STATUS_LABELS: Record<IntentStatus, string> = {
 	pending: "Pending",
 	approved: "Approved",
 	signed: "Signed",
+	authorized: "Authorized", // x402 payment authorized
 	confirmed: "Confirmed",
 	rejected: "Rejected",
 	failed: "Failed",

@@ -6,6 +6,8 @@ import type {
 	IntentStatus,
 	TransferIntent,
 	IntentUrgency,
+	X402PaymentPayload,
+	X402SettlementReceipt,
 } from "@agent-intents/shared";
 import { getExplorerTxUrl } from "@agent-intents/shared";
 import { sql } from "./db.js";
@@ -214,8 +216,11 @@ export async function updateIntentStatus(params: {
 	status: IntentStatus;
 	txHash?: string;
 	note?: string;
+	paymentSignatureHeader?: string;
+	paymentPayload?: X402PaymentPayload;
+	settlementReceipt?: X402SettlementReceipt;
 }): Promise<Intent | null> {
-	const { id, status, txHash, note } = params;
+	const { id, status, txHash, note, paymentSignatureHeader, paymentPayload, settlementReceipt } = params;
 
 	// Get current intent to check it exists
 	const existing = await sql`SELECT * FROM intents WHERE id = ${id}`;
@@ -225,6 +230,39 @@ export async function updateIntentStatus(params: {
 
 	const intentRow = existing.rows[0] as IntentRow;
 	const nowIso = new Date().toISOString();
+
+	// If we received x402 proof data or settlement receipt, persist it inside the JSON `details` blob.
+	// This avoids needing extra columns/migrations for the demo.
+	if (paymentSignatureHeader || paymentPayload || settlementReceipt) {
+		const existing = intentRow.details.x402;
+		const base =
+			paymentPayload
+				? { resource: paymentPayload.resource, accepted: paymentPayload.accepted }
+				: existing;
+
+		if (base) {
+			const nextDetails: TransferIntent = {
+				...intentRow.details,
+				x402: {
+					...base,
+					...(existing ?? {}),
+					paymentSignatureHeader:
+						paymentSignatureHeader ?? existing?.paymentSignatureHeader,
+					paymentPayload: paymentPayload ?? existing?.paymentPayload,
+					settlementReceipt: settlementReceipt ?? existing?.settlementReceipt,
+				},
+			};
+
+			await sql`
+      UPDATE intents
+      SET details = ${JSON.stringify(nextDetails)}
+      WHERE id = ${id}
+    `;
+
+			// Keep local copy in sync for txUrl computation below
+			intentRow.details = nextDetails;
+		}
+	}
 
 	// Build update based on status
 	let txUrl: string | null = null;
@@ -243,6 +281,13 @@ export async function updateIntentStatus(params: {
 		await sql`
       UPDATE intents
       SET status = ${status}, signed_at = ${nowIso}, tx_hash = ${txHash}, tx_url = ${txUrl}
+      WHERE id = ${id}
+    `;
+	} else if (status === "signed") {
+		// Signed may mean an x402 authorization signature (no onchain tx hash yet)
+		await sql`
+      UPDATE intents
+      SET status = ${status}, signed_at = ${nowIso}
       WHERE id = ${id}
     `;
 	} else if (status === "confirmed") {
