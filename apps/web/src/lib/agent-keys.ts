@@ -39,10 +39,14 @@ export async function generateAgentKeyPair(): Promise<AgentKeyMaterial> {
 	const crypto = new NobleCryptoService();
 	const keyPair = await crypto.createKeyPair(Curve.K256);
 
+	// NobleKeyPair.id is 0x-prefixed; getPublicKeyToHex() may not be
+	const rawPub = keyPair.getPublicKeyToHex();
+	const publicKeyHex = rawPub.startsWith("0x") ? rawPub : `0x${rawPub}`;
+
 	return {
 		keyPair,
 		privateKeyHex: keyPair.id, // NobleKeyPair.id is the 0x-prefixed private key hex
-		publicKeyHex: keyPair.getPublicKeyToHex(),
+		publicKeyHex,
 	};
 }
 
