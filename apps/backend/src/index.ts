@@ -293,7 +293,24 @@ app.get("/api/agents/:id", (req, res) => {
 	res.json({ success: true, member });
 });
 
-// Revoke agent
+// Revoke agent (POST /api/agents/revoke – preferred, avoids Vercel dynamic-route issues)
+app.post("/api/agents/revoke", (req, res) => {
+	const { id } = req.body as { id?: string };
+	if (!id) {
+		res.status(400).json({ success: false, error: "Missing agent ID in request body" });
+		return;
+	}
+	const member = agents.get(id);
+	if (!member || member.revokedAt) {
+		res.status(404).json({ success: false, error: "Agent not found or already revoked" });
+		return;
+	}
+	member.revokedAt = new Date().toISOString();
+	console.log(`[Agent Revoked] ${member.id} "${member.label}"`);
+	res.json({ success: true, member });
+});
+
+// Revoke agent (legacy DELETE – kept for backward compat)
 app.delete("/api/agents/:id", (req, res) => {
 	const member = agents.get(req.params.id);
 	if (!member || member.revokedAt) {
