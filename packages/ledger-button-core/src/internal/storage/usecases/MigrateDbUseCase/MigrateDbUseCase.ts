@@ -1,7 +1,10 @@
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 
 import { loggerModuleTypes } from "../../../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../../logger/service/LoggerPublisher.js";
 import { STORAGE_KEYS } from "../../model/constant.js";
 import { storageModuleTypes } from "../../storageModuleTypes.js";
 import type { StorageService } from "../../StorageService.js";
@@ -13,7 +16,7 @@ export class MigrateDbUseCase {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    private readonly loggerFactory: Factory<LoggerPublisher>,
+    private readonly loggerFactory: LoggerPublisherFactory,
     @inject(storageModuleTypes.StorageService)
     private readonly storageService: StorageService,
     @inject(storageModuleTypes.KeyPairMigrationService)

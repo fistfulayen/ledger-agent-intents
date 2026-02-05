@@ -1,6 +1,5 @@
-import { Factory } from 'inversify';
 import { Either, Maybe } from 'purify-ts';
-import { LoggerPublisher } from '../../logger/service/LoggerPublisher.js';
+import { LoggerPublisherFactory } from '../../logger/service/LoggerPublisher.js';
 import { StorageIDBErrors } from '../model/errors.js';
 import { UserConsent } from '../model/UserConsent.js';
 import { IndexedDbService } from './IndexedDbService.js';
@@ -9,7 +8,7 @@ export declare class DefaultIndexedDbService implements IndexedDbService {
     private readonly logger;
     private initialization;
     private idb;
-    constructor(loggerFactory: Factory<LoggerPublisher>);
+    constructor(loggerFactory: LoggerPublisherFactory);
     initIdb(): Promise<Either<StorageIDBErrors, IDBDatabase>>;
     storeKeyPair(keyPair: Uint8Array): Promise<Either<StorageIDBErrors, boolean>>;
     getKeyPair(): Promise<Either<StorageIDBErrors, Uint8Array>>;

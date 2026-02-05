@@ -1,13 +1,12 @@
-import { Factory } from 'inversify';
 import { Either } from 'purify-ts';
-import { LoggerPublisher } from '../../logger/service/LoggerPublisher.js';
+import { LoggerPublisherFactory } from '../../logger/service/LoggerPublisher.js';
 import { TransactionHistoryDataSource } from '../datasource/TransactionHistoryDataSource.js';
 import { TransactionHistoryError } from '../model/TransactionHistoryError.js';
 import { TransactionHistoryOptions, TransactionHistoryResult } from '../model/transactionHistoryTypes.js';
 export declare class FetchTransactionHistoryUseCase {
     private readonly dataSource;
     private readonly logger;
-    constructor(loggerFactory: Factory<LoggerPublisher>, dataSource: TransactionHistoryDataSource);
+    constructor(loggerFactory: LoggerPublisherFactory, dataSource: TransactionHistoryDataSource);
     execute(blockchain: string, address: string, options?: TransactionHistoryOptions): Promise<Either<TransactionHistoryError, TransactionHistoryResult>>;
     private transformResponse;
     private transformTransaction;

@@ -41,6 +41,7 @@ export function initializeLedgerProvider({
   target = document.body,
   loggerLevel = "info",
   environment,
+  rpcUrls,
   floatingButtonPosition = "bottom-right",
   floatingButtonTarget,
   walletTransactionFeatures,
@@ -68,6 +69,7 @@ export function initializeLedgerProvider({
       dmkConfig,
       loggerLevel,
       environment,
+      rpcUrls,
       devConfig,
     });
   }

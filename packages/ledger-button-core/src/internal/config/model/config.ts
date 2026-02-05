@@ -19,6 +19,7 @@ export type ConfigArgs = {
   logLevel?: LogLevelKey;
   dAppIdentifier: string;
   environment?: Environment;
+  rpcUrls?: Record<string, string | undefined>;
 };
 
 @injectable()
@@ -28,17 +29,20 @@ export class Config {
   logLevel: LogLevel;
   environment: Environment;
   lkrp: LKRPConfig;
+  rpcUrls: Record<string, string | undefined>;
 
   constructor({
     originToken,
     dAppIdentifier,
     logLevel = "info",
     environment = "production",
+    rpcUrls = {},
   }: ConfigArgs) {
     this.originToken = originToken;
     this.dAppIdentifier = dAppIdentifier;
     this.logLevel = LOG_LEVELS[logLevel];
     this.environment = environment;
+    this.rpcUrls = rpcUrls;
     this.lkrp = {
       cloudSyncUrl: this.getCloudSyncUrl(),
     };
@@ -68,6 +72,12 @@ export class Config {
     return this.environment === "production"
       ? "https://ledgerb.aws.prd.ldg-tech.com"
       : "https://ledgerb.aws.stg.ldg-tech.com";
+  }
+
+  getRpcUrl(chainId: string | number): string | undefined {
+    const key = String(chainId);
+    const url = this.rpcUrls[key];
+    return url || undefined;
   }
 
   getCounterValueUrl(): string {

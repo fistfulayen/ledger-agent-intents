@@ -1,6 +1,5 @@
 import { KeyPair } from '@ledgerhq/device-trusted-app-kit-ledger-keyring-protocol';
-import { Factory } from 'inversify';
-import { LoggerPublisher } from '../../logger/service/LoggerPublisher.js';
+import { LoggerPublisherFactory } from '../../logger/service/LoggerPublisher.js';
 import { StorageService } from '../../storage/StorageService.js';
 import { DecryptKeyPairUseCase } from './DecryptKeyPairUseCase.js';
 import { EncryptKeyPairUseCase } from './EncryptKeyPairUseCase.js';
@@ -13,7 +12,7 @@ export declare class GetOrCreateKeyPairUseCase {
     private readonly encryptKeyPairUseCase;
     private readonly decryptKeyPairUseCase;
     private logger;
-    constructor(loggerFactory: Factory<LoggerPublisher>, storageService: StorageService, generateKeyPairUseCase: GenerateKeyPairUseCase, getEncryptionKeyUseCase: GetEncryptionKeyUseCase, encryptKeyPairUseCase: EncryptKeyPairUseCase, decryptKeyPairUseCase: DecryptKeyPairUseCase);
+    constructor(loggerFactory: LoggerPublisherFactory, storageService: StorageService, generateKeyPairUseCase: GenerateKeyPairUseCase, getEncryptionKeyUseCase: GetEncryptionKeyUseCase, encryptKeyPairUseCase: EncryptKeyPairUseCase, decryptKeyPairUseCase: DecryptKeyPairUseCase);
     execute(): Promise<KeyPair>;
 }
 //# sourceMappingURL=GetOrCreateKeyPairUseCase.d.ts.map

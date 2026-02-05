@@ -1,11 +1,13 @@
-import type { Factory } from "inversify";
 import { inject, injectable } from "inversify";
 import { Either, Right } from "purify-ts";
 
 import { contextModuleTypes } from "../../context/contextModuleTypes.js";
 import type { ContextService } from "../../context/ContextService.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { accountModuleTypes } from "../accountModuleTypes.js";
 import type { Account, DetailedAccount } from "../service/AccountService.js";
 import {
@@ -19,7 +21,7 @@ export class GetDetailedSelectedAccountUseCase {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(contextModuleTypes.ContextService)
     private readonly contextService: ContextService,
     @inject(accountModuleTypes.FetchSelectedAccountUseCase)

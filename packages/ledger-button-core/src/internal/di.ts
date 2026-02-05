@@ -28,6 +28,7 @@ export function createContainer({
   apiKey,
   dAppIdentifier,
   environment = "production",
+  rpcUrls,
   devConfig = {
     stub: {
       base: false,
@@ -43,7 +44,13 @@ export function createContainer({
   const container = new Container();
 
   container.loadSync(
-    configModuleFactory({ loggerLevel, apiKey, dAppIdentifier, environment }),
+    configModuleFactory({
+      loggerLevel,
+      apiKey,
+      dAppIdentifier,
+      environment,
+      rpcUrls,
+    }),
     balanceModuleFactory({ stub: devConfig.stub.balance }),
     loggerModuleFactory({
       stub: devConfig.stub.base,

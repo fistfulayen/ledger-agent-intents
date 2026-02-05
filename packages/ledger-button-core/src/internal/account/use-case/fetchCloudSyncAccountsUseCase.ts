@@ -1,4 +1,4 @@
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { lastValueFrom } from "rxjs";
 
 import { base64ToArrayBuffer } from "../../../api/utils/base64Utils.js";
@@ -9,7 +9,10 @@ import { LedgerSyncAuthContextMissingError } from "../../ledgersync/model/errors
 import type { InternalAuthContext } from "../../ledgersync/model/InternalAuthContext.js";
 import type { LedgerSyncService } from "../../ledgersync/service/LedgerSyncService.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import {
+  type LoggerPublisher,
+  type LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import type { CloudSyncData } from "../service/AccountService.js";
 
 @injectable()
@@ -18,7 +21,7 @@ export class FetchCloudSyncAccountsUseCase {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(ledgerSyncModuleTypes.LedgerSyncService)
     private readonly ledgerSyncService: LedgerSyncService,
     @inject(cloudSyncModuleTypes.CloudSyncService)

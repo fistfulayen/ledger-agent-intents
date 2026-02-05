@@ -47,6 +47,9 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 	// Track the provider UUID to avoid re-setting state for the same provider
 	const providerUuidRef = useRef<string | null>(null);
 
+	const useStubDAppConfig =
+		import.meta.env.VITE_LEDGER_STUB_DAPP_CONFIG === "true";
+
 	// Initialize Ledger Button Provider
 	useEffect(() => {
 		if (typeof window === "undefined") return;
@@ -82,12 +85,18 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 						floatingButtonPosition: false,
 						dAppIdentifier: "multisig",
 						apiKey: import.meta.env.VITE_LEDGER_API_KEY || "",
-						loggerLevel: "info",
-						devConfig: {
-							stub: {
-								dAppConfig: true,
-							},
+						rpcUrls: {
+							// Base mainnet (optional override for fee estimation / nonce / etc.)
+							"8453": import.meta.env.VITE_BASE_MAINNET_RPC_URL,
 						},
+						loggerLevel: "info",
+						devConfig: useStubDAppConfig
+							? {
+									stub: {
+										dAppConfig: true,
+									},
+								}
+							: undefined,
 					});
 					// Mark the app as ready after a short delay to allow it to mount
 					setTimeout(() => {
@@ -108,7 +117,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			// across HMR and React Strict Mode double-mounting.
 			// The button will be cleaned up when the page is unloaded.
 		};
-	}, []);
+	}, [useStubDAppConfig]);
 
 	// Listen for account/chain changes
 	useEffect(() => {

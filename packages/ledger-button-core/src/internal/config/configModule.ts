@@ -6,7 +6,7 @@ import { configModuleTypes } from "./configModuleTypes.js";
 
 type ConfigModuleOptions = Pick<
   ContainerOptions,
-  "loggerLevel" | "apiKey" | "dAppIdentifier" | "environment"
+  "loggerLevel" | "apiKey" | "dAppIdentifier" | "environment" | "rpcUrls"
 >;
 
 const originToken =
@@ -17,6 +17,7 @@ export function configModuleFactory({
   apiKey,
   dAppIdentifier,
   environment,
+  rpcUrls,
 }: ConfigModuleOptions) {
   return new ContainerModule(({ bind }) => {
     bind<Config>(configModuleTypes.Config).toResolvedValue(() => {
@@ -25,6 +26,7 @@ export function configModuleFactory({
         originToken: apiKey || originToken,
         dAppIdentifier: dAppIdentifier || "",
         environment,
+        rpcUrls,
       });
     });
   });

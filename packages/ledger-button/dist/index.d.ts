@@ -11,5 +11,5 @@ export type InitializeLedgerProviderOptions = LedgerButtonCoreOptions & {
     floatingButtonTarget?: HTMLElement | string;
     walletTransactionFeatures?: WalletTransactionFeature[];
 };
-export declare function initializeLedgerProvider({ apiKey, dAppIdentifier, dmkConfig, target, loggerLevel, environment, floatingButtonPosition, floatingButtonTarget, walletTransactionFeatures, devConfig, }: InitializeLedgerProviderOptions): () => void;
+export declare function initializeLedgerProvider({ apiKey, dAppIdentifier, dmkConfig, target, loggerLevel, environment, rpcUrls, floatingButtonPosition, floatingButtonTarget, walletTransactionFeatures, devConfig, }: InitializeLedgerProviderOptions): () => void;
 //# sourceMappingURL=index.d.ts.map

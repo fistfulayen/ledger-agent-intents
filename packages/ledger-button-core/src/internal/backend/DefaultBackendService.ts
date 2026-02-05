@@ -16,6 +16,7 @@ import type {
   ConfigRequest,
   ConfigResponse,
 } from "./types.js";
+import { isJsonRpcResponse, isJsonRpcResponseSuccess } from "./types.js";
 
 @injectable()
 export class DefaultBackendService implements BackendService {
@@ -28,14 +29,71 @@ export class DefaultBackendService implements BackendService {
 
   async broadcast(
     request: BroadcastRequest,
-    domain = "ledger-button-domain",
+    domain?: string,
   ): Promise<Either<Error, BroadcastResponse>> {
+    const customRpcUrl =
+      request.blockchain?.name === "ethereum"
+        ? this.config.getRpcUrl(request.blockchain.chainId)
+        : undefined;
+
+    if (customRpcUrl) {
+      try {
+        const response = await fetch(customRpcUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(request.rpc),
+        });
+
+        if (!response.ok) {
+          return Left(
+            new BroadcastTransactionError(
+              `Broadcast failed: custom RPC error (status ${response.status})`,
+              {
+                error: new Error(
+                  `Custom RPC request failed (status ${response.status})`,
+                ),
+              },
+            ),
+          );
+        }
+
+        const json = (await response.json()) as BroadcastResponse;
+        // If the RPC returns a JSON-RPC error payload (HTTP 200), treat it as a Left so
+        // callers can apply fallback logic instead of throwing on "non-success" Right values.
+        if (isJsonRpcResponse(json) && !isJsonRpcResponseSuccess(json)) {
+          return Left(
+            new BroadcastTransactionError(
+              "Broadcast failed: custom RPC returned JSON-RPC error",
+              {
+                error: new Error(
+                  `Custom RPC JSON-RPC error: ${JSON.stringify((json as any).error)}`,
+                ),
+              },
+            ),
+          );
+        }
+
+        return Right(json);
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        return Left(
+          new BroadcastTransactionError("Broadcast failed: custom RPC error", {
+            error: err,
+          }),
+        );
+      }
+    }
+
     const url = `${this.config.getBackendUrl()}/broadcast`;
+    const domainHeader =
+      domain || this.config.dAppIdentifier || "ledger-button-domain";
 
     const headers = {
       "Content-Type": "application/json",
       "X-Ledger-client-origin": this.config.originToken,
-      "X-Ledger-Domain": domain,
+      "X-Ledger-Domain": domainHeader,
     };
 
     const options: NetworkServiceOpts = {

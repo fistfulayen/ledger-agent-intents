@@ -1,4 +1,4 @@
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { EitherAsync } from "purify-ts";
 
 import { JsonRpcResponseSuccess } from "../../../api/model/eip/EIPTypes.js";
@@ -8,8 +8,13 @@ import {
 } from "../../../internal/backend/types.js";
 import { backendModuleTypes } from "../../backend/backendModuleTypes.js";
 import { type BackendService } from "../../backend/BackendService.js";
+import { configModuleTypes } from "../../config/configModuleTypes.js";
+import { Config } from "../../config/model/config.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import {
+  type LoggerPublisher,
+  type LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { balanceModuleTypes } from "../balanceModuleTypes.js";
 import { getAlpacaNetworkName } from "../constants/networkConstants.js";
 import type { AlpacaDataSource } from "../datasource/alpaca/AlpacaDataSource.js";
@@ -22,11 +27,13 @@ export class DefaultGasFeeEstimationService implements GasFeeEstimationService {
   private readonly logger: LoggerPublisher;
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    private readonly loggerFactory: Factory<LoggerPublisher>,
+    private readonly loggerFactory: LoggerPublisherFactory,
     @inject(backendModuleTypes.BackendService)
     private readonly backendService: BackendService,
     @inject(balanceModuleTypes.AlpacaDataSource)
     private readonly alpacaDataSource: AlpacaDataSource,
+    @inject(configModuleTypes.Config)
+    private readonly config: Config,
   ) {
     this.logger = this.loggerFactory("[DefaultGasFeeEstimationService]");
   }
@@ -44,6 +51,16 @@ export class DefaultGasFeeEstimationService implements GasFeeEstimationService {
   }
 
   async getFeesForTransaction(tx: TransactionInfo): Promise<GasFeeEstimation> {
+    // If a custom RPC is provided for this chain, prefer it over Alpaca.
+    // This is especially useful for local/dev usage where Alpaca/Ledger backend
+    // routing is unavailable or returns server errors.
+    if (this.config.getRpcUrl(tx.chainId)) {
+      this.logger.debug("Custom RPC configured, using RPC fee estimation", {
+        chainId: tx.chainId,
+      });
+      return this.getFeesFromRpc(tx);
+    }
+
     const alpacaNetwork = getAlpacaNetworkName(tx.chainId);
 
     if (!alpacaNetwork) {
@@ -76,17 +93,46 @@ export class DefaultGasFeeEstimationService implements GasFeeEstimationService {
     tx: TransactionInfo,
     network: string,
   ): Promise<GasFeeEstimation | undefined> {
-    const intent = {
-      type: "send",
-      sender: tx.from,
-      recipient: tx.to,
-      amount: tx.value,
-      asset: {
-        type: "native",
-      },
-      feesStrategy: "medium" as const,
-      data: tx.data,
-    };
+    const valueAsDecimal = (() => {
+      try {
+        // `tx.value` is usually a hex string (e.g. "0x0") for EVM JSON-RPC.
+        // Alpaca expects a decimal string (see tests in `DefaultAlpacaDataSource.test.ts`).
+        return tx.value.startsWith("0x")
+          ? BigInt(tx.value).toString(10)
+          : BigInt(tx.value).toString(10);
+      } catch {
+        // Fallback: keep original; Alpaca may reject this, but we'll fallback to RPC anyway.
+        return tx.value;
+      }
+    })();
+
+    const hasCalldata = tx.data !== undefined && tx.data !== "" && tx.data !== "0x";
+    const isErc20Transfer =
+      typeof tx.data === "string" &&
+      (tx.data.startsWith("0xa9059cbb") || tx.data.startsWith("0x23b872dd"));
+
+    const intent = hasCalldata
+      ? {
+          // Contract call (incl ERC-20 transfer)
+          type: "contract_call",
+          sender: tx.from,
+          recipient: tx.to,
+          amount: valueAsDecimal,
+          asset: isErc20Transfer
+            ? { type: "erc20", assetReference: tx.to }
+            : { type: "native" },
+          feesStrategy: "medium" as const,
+          data: tx.data,
+        }
+      : {
+          // Native send
+          type: "send",
+          sender: tx.from,
+          recipient: tx.to,
+          amount: valueAsDecimal,
+          asset: { type: "native" },
+          feesStrategy: "medium" as const,
+        };
 
     const result = await EitherAsync(async () => {
       const either = await this.alpacaDataSource.estimateTransactionFee(network, intent);

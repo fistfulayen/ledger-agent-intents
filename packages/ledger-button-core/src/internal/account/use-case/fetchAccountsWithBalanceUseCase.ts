@@ -1,4 +1,4 @@
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import {
   catchError,
   from,
@@ -12,7 +12,10 @@ import {
 } from "rxjs";
 
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import {
+  type LoggerPublisher,
+  type LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { accountModuleTypes } from "../accountModuleTypes.js";
 import type { Account, AccountUpdate } from "../service/AccountService.js";
 import { FetchAccountsUseCase } from "./fetchAccountsUseCase.js";
@@ -24,7 +27,7 @@ export class FetchAccountsWithBalanceUseCase {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(accountModuleTypes.FetchAccountsUseCase)
     private readonly fetchAccountsUseCase: FetchAccountsUseCase,
     @inject(accountModuleTypes.HydrateAccountWithBalanceUseCase)

@@ -14,7 +14,7 @@ import {
   Permissions,
 } from "@ledgerhq/device-trusted-app-kit-ledger-keyring-protocol";
 import { AuthenticateUsecaseInput } from "@ledgerhq/device-trusted-app-kit-ledger-keyring-protocol/internal/use-cases/authentication/AuthenticateUseCase.js";
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import pako from "pako";
 import { from, map, Observable, switchMap } from "rxjs";
 
@@ -34,7 +34,10 @@ import { GetOrCreateKeyPairUseCase } from "../../cryptographic/usecases/GetOrCre
 import { deviceModuleTypes } from "../../device/deviceModuleTypes.js";
 import type { DeviceManagementKitService } from "../../device/service/DeviceManagementKitService.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { storageModuleTypes } from "../../storage/storageModuleTypes.js";
 import type { StorageService } from "../../storage/StorageService.js";
 import {
@@ -56,7 +59,7 @@ export class DefaultLedgerSyncService implements LedgerSyncService {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    private readonly loggerFactory: Factory<LoggerPublisher>,
+    private readonly loggerFactory: LoggerPublisherFactory,
     @inject(deviceModuleTypes.DeviceManagementKitService)
     private readonly deviceManagementKitService: DeviceManagementKitService,
     @inject(storageModuleTypes.StorageService)

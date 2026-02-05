@@ -1,0 +1,148 @@
+---
+description: React performance + bundling best practices tailored to this repo (Vite + React + TanStack Router/Query)
+globs: ["apps/web/src/**/*.tsx", "apps/web/src/**/*.ts", "apps/web/api/**/*.ts", "apps/backend/src/**/*.ts"]
+alwaysApply: true
+---
+
+# React Best Practices (Performance)
+
+This repo uses **Vite + React** (with **TanStack Router** and **TanStack Query**) and the **Lumen** design system.
+
+These rules are adapted from Vercel’s React best practices guidance and tuned for this codebase. Prefer these patterns when writing or refactoring code.
+
+## Eliminate async waterfalls (highest impact)
+
+### Start promises early, await late
+
+- Prefer `Promise.all(...)` for independent work.
+- Avoid sequential `await` inside loops; collect promises then await.
+- If a value is only needed in some branches, move the `await` into that branch.
+
+```ts
+// Bad: sequential awaits
+const a = await fetchA();
+const b = await fetchB();
+
+// Good: parallel
+const [a, b] = await Promise.all([fetchA(), fetchB()]);
+```
+
+```ts
+// Bad: sequential awaits in a loop
+const results = [];
+for (const id of ids) {
+  results.push(await fetchById(id));
+}
+
+// Good: parallel
+const results = await Promise.all(ids.map((id) => fetchById(id)));
+```
+
+### API routes / server handlers: kick off I/O early
+
+In handlers (backend routes, Vercel functions under `apps/web/api`), begin independent requests first, then `await` when you actually need the results.
+
+## Bundle size + code-splitting (critical for web)
+
+### Avoid “barrel” imports for third-party packages
+
+- Prefer importing from the most specific entrypoint you need (smaller bundles, better tree-shaking).
+- It’s OK to keep **local** `index.ts` barrels for ergonomics, but be careful not to create a “god barrel” that forces large imports into critical paths.
+
+```ts
+// Prefer (more tree-shakable)
+import { RouterProvider } from "@tanstack/react-router";
+
+// Avoid (example): pulling many exports via a generic barrel
+// import { RouterProvider } from "@tanstack/react-router"; // (fine)
+// import { something } from "@/components"; // (use only if it doesn't over-import)
+```
+
+### Lazy-load heavy or rarely-used UI
+
+For route-level splits and big components (dialogs, inspectors, code highlighting, large tables), use `import()` / `React.lazy` so they don’t land in the initial bundle.
+
+```tsx
+import { lazy, Suspense } from "react";
+
+const IntentDetailDialog = lazy(() => import("./IntentDetailDialog"));
+
+export function IntentDetailDialogLazy(props: { open: boolean }) {
+  if (!props.open) return null;
+  return (
+    <Suspense fallback={null}>
+      <IntentDetailDialog />
+    </Suspense>
+  );
+}
+```
+
+### Don’t suggest Next.js-only APIs
+
+This app is **not Next.js**. Do **not** introduce:
+- `next/dynamic`, `next/script`, Next Server Actions, or RSC patterns
+
+Use standard React + Vite patterns instead.
+
+## Client-side data fetching (TanStack Query)
+
+### Deduplicate and cache by query key
+
+- Prefer TanStack Query (`useQuery`, `useInfiniteQuery`, etc.) over ad-hoc `useEffect(fetch...)` where possible.
+- Ensure query keys are stable and include only primitives/serializable values.
+- Avoid re-creating query functions or key objects unnecessarily in render.
+
+```ts
+// Good: stable query key
+useQuery({
+  queryKey: ["intents", accountId],
+  queryFn: () => fetchIntents({ accountId }),
+});
+```
+
+### Avoid fetch-in-render loops
+
+- Never call `fetch(...)` (or any async) directly during render.
+- Prefer Query, loaders, or event-driven fetches.
+
+## Re-render optimization (medium impact, common regressions)
+
+### Keep effect dependencies primitive + stable
+
+- Avoid depending on freshly-created objects/functions.
+- If you need an object dependency, memoize it with `useMemo` (but don’t memoize trivial primitives).
+
+```ts
+// Bad: new object each render => effect runs each time
+useEffect(() => {
+  doSomething(filters);
+}, [{ q, status }]);
+
+// Good: memoize object if it must exist
+const filters = useMemo(() => ({ q, status }), [q, status]);
+useEffect(() => {
+  doSomething(filters);
+}, [filters]);
+```
+
+### Prefer derived state during render (not in effects)
+
+- Don’t mirror props into state unless you truly need “state with history”.
+- Compute derived booleans/labels inline or via memo when expensive.
+
+### Use functional `setState` for stable updates
+
+```ts
+setCount((c) => c + 1);
+```
+
+### Use `startTransition` for non-urgent updates
+
+If an update can be deferred (filtering/sorting large lists, showing detail panes), use React’s transition APIs to keep input responsive.
+
+## Rendering performance for long lists
+
+If an intents view renders many rows/cards:
+- Prefer pagination or virtualization when needed.
+- If virtualization is overkill, consider `content-visibility: auto` on long scrollers (with appropriate contain-intrinsicsize) to reduce offscreen work.
+

@@ -1,7 +1,7 @@
 import { DAppConfig } from "../dAppConfigTypes.js";
 
 export const stubDAppConfig: DAppConfig = {
-  // Based on 1inch supported networks: https://help.1inch.io/en/articles/5528619-how-to-use-different-networks-on-1inch
+  // Generic stub dAppConfig for local/dev usage.
   supportedBlockchains: [
     {
       id: "1",
@@ -71,12 +71,13 @@ export const stubDAppConfig: DAppConfig = {
     },
   ],
   referralUrl: "https://shop.ledger.com/pages/hardware-wallets-comparison",
-  domainUrl: "https://app.1inch.io/",
+  domainUrl: "https://example.com/",
   appDependencies: [
     {
       blockchain: "ethereum",
-      appName: "1inch",
-      dependencies: ["1inch", "Ethereum"],
+      // For EVM chains (Ethereum, Base, Arbitrum, ...), the device app to open is "Ethereum".
+      appName: "Ethereum",
+      dependencies: ["Ethereum"],
     },
   ],
 };

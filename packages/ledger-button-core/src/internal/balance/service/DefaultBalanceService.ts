@@ -1,9 +1,12 @@
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { Either, Left, Right } from "purify-ts";
 
 import { Account } from "../../../internal/account/service/AccountService.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import { type LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import {
+  type LoggerPublisher,
+  type LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { balanceModuleTypes } from "../balanceModuleTypes.js";
 import type { AlpacaDataSource } from "../datasource/alpaca/AlpacaDataSource.js";
 import { AlpacaBalance } from "../datasource/alpaca/alpacaTypes.js";
@@ -21,7 +24,7 @@ export class DefaultBalanceService implements BalanceService {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    private readonly loggerFactory: Factory<LoggerPublisher>,
+    private readonly loggerFactory: LoggerPublisherFactory,
     @inject(balanceModuleTypes.AlpacaDataSource)
     private readonly alpacaDataSource: AlpacaDataSource,
     @inject(balanceModuleTypes.CalDataSource)

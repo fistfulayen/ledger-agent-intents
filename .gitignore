@@ -9,6 +9,7 @@ build/
 apps/**/dist/
 .next/
 out/
+*.tsbuildinfo
 
 # Turbo
 .turbo/

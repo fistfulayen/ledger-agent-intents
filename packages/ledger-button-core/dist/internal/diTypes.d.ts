@@ -4,6 +4,14 @@ export type DeviceModuleOptions = Partial<DmkConfig>;
 export type ContainerOptions = {
     apiKey?: string;
     dAppIdentifier?: string;
+    /**
+     * Optional chainId -> JSON-RPC URL overrides.
+     * Keys are chain IDs as strings (e.g. "8453").
+     *
+     * When set, some internal JSON-RPC calls (gas estimation, nonce, etc.)
+     * can be routed directly to this endpoint instead of Ledger backend routing.
+     */
+    rpcUrls?: Record<string, string | undefined>;
     dmkConfig?: DeviceModuleOptions;
     loggerLevel?: LogLevelKey;
     environment?: "staging" | "production";

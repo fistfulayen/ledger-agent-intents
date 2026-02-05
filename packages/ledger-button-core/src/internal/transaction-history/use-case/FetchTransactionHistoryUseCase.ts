@@ -1,9 +1,11 @@
-import type { Factory } from "inversify";
 import { inject, injectable } from "inversify";
 import { Either, Left, Right } from "purify-ts";
 
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import type { TransactionHistoryDataSource } from "../datasource/TransactionHistoryDataSource.js";
 import { TransactionHistoryError } from "../model/TransactionHistoryError.js";
 import {
@@ -22,7 +24,7 @@ export class FetchTransactionHistoryUseCase {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(transactionHistoryModuleTypes.TransactionHistoryDataSource)
     private readonly dataSource: TransactionHistoryDataSource,
   ) {

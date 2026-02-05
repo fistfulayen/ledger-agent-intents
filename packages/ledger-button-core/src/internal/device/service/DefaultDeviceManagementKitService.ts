@@ -15,12 +15,15 @@ import {
   webHidIdentifier,
   webHidTransportFactory,
 } from "@ledgerhq/device-transport-kit-web-hid";
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { firstValueFrom } from "rxjs";
 
 import { type DeviceModuleOptions } from "../../diTypes.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import { type LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { deviceModuleTypes } from "../deviceModuleTypes.js";
 import { Device } from "../model/Device.js";
 import { DeviceConnectionError } from "../model/errors.js";
@@ -41,7 +44,7 @@ export class DefaultDeviceManagementKitService
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(deviceModuleTypes.DmkConfig)
     args: DeviceModuleOptions,
   ) {

@@ -1,5 +1,4 @@
 import { OpenAppWithDependenciesDAInput } from '@ledgerhq/device-management-kit';
-import { Factory } from 'inversify';
 import { Observable } from 'rxjs';
 import { SignFlowStatus } from '../../../api/model/signing/SignFlowStatus.js';
 import { SignTypedMessageParams } from '../../../api/model/signing/SignTypedMessageParams.js';
@@ -7,7 +6,7 @@ import { Config } from '../../config/model/config.js';
 import { DAppConfigService } from '../../dAppConfig/service/DAppConfigService.js';
 import { TrackTypedMessageCompleted } from '../../event-tracking/usecase/TrackTypedMessageCompleted.js';
 import { TrackTypedMessageStarted } from '../../event-tracking/usecase/TrackTypedMessageStarted.js';
-import { LoggerPublisher } from '../../logger/service/LoggerPublisher.js';
+import { LoggerPublisherFactory } from '../../logger/service/LoggerPublisher.js';
 import { StorageService } from '../../storage/StorageService.js';
 import { DeviceManagementKitService } from '../service/DeviceManagementKitService.js';
 export declare class SignTypedData {
@@ -19,7 +18,7 @@ export declare class SignTypedData {
     private readonly trackTypedMessageCompleted;
     private readonly logger;
     private pendingStep;
-    constructor(loggerFactory: Factory<LoggerPublisher>, deviceManagementKitService: DeviceManagementKitService, storageService: StorageService, dappConfigService: DAppConfigService, config: Config, trackTypedMessageStarted: TrackTypedMessageStarted, trackTypedMessageCompleted: TrackTypedMessageCompleted);
+    constructor(loggerFactory: LoggerPublisherFactory, deviceManagementKitService: DeviceManagementKitService, storageService: StorageService, dappConfigService: DAppConfigService, config: Config, trackTypedMessageStarted: TrackTypedMessageStarted, trackTypedMessageCompleted: TrackTypedMessageCompleted);
     execute(params: SignTypedMessageParams): Observable<SignFlowStatus>;
     createOpenAppConfig(): Promise<OpenAppWithDependenciesDAInput>;
     private getTransactionResultForEvent;

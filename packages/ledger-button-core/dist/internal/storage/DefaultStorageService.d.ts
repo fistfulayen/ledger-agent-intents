@@ -1,16 +1,15 @@
-import { Factory } from 'inversify';
 import { Either, Maybe } from 'purify-ts';
 import { StorageIDBErrors } from './model/errors.js';
 import { UserConsent } from './model/UserConsent.js';
 import { IndexedDbService } from './service/IndexedDbService.js';
 import { Account } from '../account/service/AccountService.js';
-import { LoggerPublisher } from '../logger/service/LoggerPublisher.js';
+import { LoggerPublisherFactory } from '../logger/service/LoggerPublisher.js';
 import { StorageService } from './StorageService.js';
 export declare class DefaultStorageService implements StorageService {
     private readonly loggerFactory;
     private readonly indexedDbService;
     private readonly logger;
-    constructor(loggerFactory: Factory<LoggerPublisher>, indexedDbService: IndexedDbService);
+    constructor(loggerFactory: LoggerPublisherFactory, indexedDbService: IndexedDbService);
     static formatKey(key: string): string;
     setDbVersion(version: number): Promise<Either<StorageIDBErrors, void>>;
     getDbVersion(): Promise<number>;

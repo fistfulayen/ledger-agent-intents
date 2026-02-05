@@ -2,6 +2,7 @@ import { Left, Right } from "purify-ts";
 
 import { JsonRpcResponseSuccess } from "../../../api/model/eip/EIPTypes.js";
 import { BackendService } from "../../backend/BackendService.js";
+import { Config } from "../../config/model/config.js";
 import { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
 import { AlpacaDataSource } from "../datasource/alpaca/AlpacaDataSource.js";
 import { TransactionInfo } from "../model/types.js";
@@ -13,6 +14,7 @@ describe("DefaultGasFeeEstimationService", () => {
   let mockBackendService: BackendService;
   let mockAlpacaDataSource: AlpacaDataSource;
   let mockLogger: LoggerPublisher;
+  let mockConfig: Config;
 
   const mockTx: TransactionInfo = {
     chainId: "1",
@@ -45,10 +47,15 @@ describe("DefaultGasFeeEstimationService", () => {
       estimateTransactionFee: vi.fn(),
     } as unknown as AlpacaDataSource;
 
+    mockConfig = {
+      getRpcUrl: vi.fn().mockReturnValue(undefined),
+    } as unknown as Config;
+
     gasFeeEstimationService = new DefaultGasFeeEstimationService(
       mockLoggerFactory,
       mockBackendService,
       mockAlpacaDataSource,
+      mockConfig,
     );
   });
 

@@ -13,7 +13,7 @@ import {
 } from "@ledgerhq/device-signer-kit-ethereum";
 import { EthAppCommandError } from "@ledgerhq/device-signer-kit-ethereum/internal/app-binder/command/utils/ethAppErrors.js";
 import { Signature } from "ethers";
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import {
   BehaviorSubject,
   filter,
@@ -57,7 +57,10 @@ import { eventTrackingModuleTypes } from "../../event-tracking/eventTrackingModu
 import { TrackTransactionCompleted } from "../../event-tracking/usecase/TrackTransactionCompleted.js";
 import { TrackTransactionStarted } from "../../event-tracking/usecase/TrackTransactionStarted.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { modalModuleTypes } from "../../modal/modalModuleTypes.js";
 import { ModalService } from "../../modal/service/ModalService.js";
 import { storageModuleTypes } from "../../storage/storageModuleTypes.js";
@@ -81,7 +84,7 @@ export class SignRawTransaction {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(deviceModuleTypes.DeviceManagementKitService)
     private readonly deviceManagementKitService: DeviceManagementKitService,
     @inject(storageModuleTypes.StorageService)

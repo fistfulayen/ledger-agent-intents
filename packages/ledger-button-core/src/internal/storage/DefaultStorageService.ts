@@ -1,4 +1,4 @@
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { Either, Just, Maybe, Nothing } from "purify-ts";
 
 import { AccountDbModel, mapToAccountDbModel } from "./model/accountDbModel.js";
@@ -8,7 +8,10 @@ import { type UserConsent } from "./model/UserConsent.js";
 import { type IndexedDbService } from "./service/IndexedDbService.js";
 import { type Account } from "../account/service/AccountService.js";
 import { loggerModuleTypes } from "../logger/loggerModuleTypes.js";
-import { type LoggerPublisher } from "../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../logger/service/LoggerPublisher.js";
 import { storageModuleTypes } from "./storageModuleTypes.js";
 import { type StorageService } from "./StorageService.js";
 
@@ -18,7 +21,7 @@ export class DefaultStorageService implements StorageService {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    private readonly loggerFactory: Factory<LoggerPublisher>,
+    private readonly loggerFactory: LoggerPublisherFactory,
     @inject(storageModuleTypes.IndexedDbService)
     private readonly indexedDbService: IndexedDbService,
   ) {

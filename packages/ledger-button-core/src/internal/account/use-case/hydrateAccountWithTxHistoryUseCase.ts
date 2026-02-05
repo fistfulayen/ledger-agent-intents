@@ -1,8 +1,10 @@
-import type { Factory } from "inversify";
 import { inject, injectable } from "inversify";
 
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import type { TransactionHistoryItem } from "../../transaction-history/model/transactionHistoryTypes.js";
 import { transactionHistoryModuleTypes } from "../../transaction-history/transactionHistoryModuleTypes.js";
 import type { FetchTransactionHistoryUseCase } from "../../transaction-history/use-case/FetchTransactionHistoryUseCase.js";
@@ -18,7 +20,7 @@ export class HydrateAccountWithTxHistoryUseCase {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(transactionHistoryModuleTypes.FetchTransactionHistoryUseCase)
     private readonly fetchTransactionHistoryUseCase: FetchTransactionHistoryUseCase,
   ) {

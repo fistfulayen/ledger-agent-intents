@@ -1,4 +1,4 @@
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { from, Observable, switchMap } from "rxjs";
 
 import { SignFlowStatus } from "../../../api/model/signing/SignFlowStatus.js";
@@ -12,7 +12,10 @@ import { type GasFeeEstimationService } from "../../balance/service/GasFeeEstima
 import { contextModuleTypes } from "../../context/contextModuleTypes.js";
 import { type ContextService } from "../../context/ContextService.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { storageModuleTypes } from "../../storage/storageModuleTypes.js";
 import { type StorageService } from "../../storage/StorageService.js";
 import { deviceModuleTypes } from "../deviceModuleTypes.js";
@@ -23,7 +26,7 @@ export class SignTransaction {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(balanceModuleTypes.GasFeeEstimationService)
     private readonly gasFeeEstimationService: GasFeeEstimationService,
     @inject(storageModuleTypes.StorageService)

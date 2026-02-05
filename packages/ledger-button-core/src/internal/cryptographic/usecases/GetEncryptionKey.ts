@@ -1,7 +1,10 @@
-import { type Factory, inject } from "inversify";
+import { inject } from "inversify";
 
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { storageModuleTypes } from "../../storage/storageModuleTypes.js";
 import type { StorageService } from "../../storage/StorageService.js";
 
@@ -10,7 +13,7 @@ export class GetEncryptionKeyUseCase {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    private readonly loggerFactory: Factory<LoggerPublisher>,
+    private readonly loggerFactory: LoggerPublisherFactory,
     @inject(storageModuleTypes.StorageService)
     private readonly storageService: StorageService,
   ) {

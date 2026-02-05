@@ -1,6 +1,6 @@
-import { Factory } from 'inversify';
 import { BackendService } from '../../backend/BackendService.js';
-import { LoggerPublisher } from '../../logger/service/LoggerPublisher.js';
+import { Config } from '../../config/model/config.js';
+import { LoggerPublisherFactory } from '../../logger/service/LoggerPublisher.js';
 import { AlpacaDataSource } from '../datasource/alpaca/AlpacaDataSource.js';
 import { TransactionInfo, GasFeeEstimation } from '../model/types.js';
 import { GasFeeEstimationService } from './GasFeeEstimationService.js';
@@ -8,8 +8,9 @@ export declare class DefaultGasFeeEstimationService implements GasFeeEstimationS
     private readonly loggerFactory;
     private readonly backendService;
     private readonly alpacaDataSource;
+    private readonly config;
     private readonly logger;
-    constructor(loggerFactory: Factory<LoggerPublisher>, backendService: BackendService, alpacaDataSource: AlpacaDataSource);
+    constructor(loggerFactory: LoggerPublisherFactory, backendService: BackendService, alpacaDataSource: AlpacaDataSource, config: Config);
     getNonceForTx(tx: TransactionInfo): Promise<string>;
     getFeesForTransaction(tx: TransactionInfo): Promise<GasFeeEstimation>;
     private getFeesFromAlpaca;

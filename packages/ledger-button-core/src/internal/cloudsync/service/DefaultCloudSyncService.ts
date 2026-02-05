@@ -1,4 +1,4 @@
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { Either } from "purify-ts";
 
 import {
@@ -9,7 +9,10 @@ import { configModuleTypes } from "../../config/configModuleTypes.js";
 import { Config } from "../../config/model/config.js";
 import { InternalAuthContext } from "../../ledgersync/model/InternalAuthContext.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import {
+  type LoggerPublisher,
+  type LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { networkModuleTypes } from "../../network/networkModuleTypes.js";
 import { type NetworkService } from "../../network/NetworkService.js";
 import { CloudSyncData } from "../model/cloudSyncTypes.js";
@@ -21,7 +24,7 @@ export class DefaultCloudSyncService implements CloudSyncService {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(networkModuleTypes.NetworkService)
     private readonly networkService: NetworkService<RequestInit>,
     @inject(configModuleTypes.Config)

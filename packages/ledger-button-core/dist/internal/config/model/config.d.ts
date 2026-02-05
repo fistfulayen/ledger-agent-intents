@@ -8,6 +8,7 @@ export type ConfigArgs = {
     logLevel?: LogLevelKey;
     dAppIdentifier: string;
     environment?: Environment;
+    rpcUrls?: Record<string, string | undefined>;
 };
 export declare class Config {
     originToken: string;
@@ -15,12 +16,14 @@ export declare class Config {
     logLevel: LogLevel;
     environment: Environment;
     lkrp: LKRPConfig;
-    constructor({ originToken, dAppIdentifier, logLevel, environment, }: ConfigArgs);
+    rpcUrls: Record<string, string | undefined>;
+    constructor({ originToken, dAppIdentifier, logLevel, environment, rpcUrls, }: ConfigArgs);
     private getCloudSyncUrl;
     setLogLevel(logLevel: LogLevelKey): void;
     getAlpacaUrl(): string;
     getCalUrl(): string;
     getBackendUrl(): string;
+    getRpcUrl(chainId: string | number): string | undefined;
     getCounterValueUrl(): string;
     getExplorerUrl(): string;
     setEnvironment(environment: Environment): void;

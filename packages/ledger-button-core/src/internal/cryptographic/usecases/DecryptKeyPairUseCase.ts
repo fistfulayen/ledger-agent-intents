@@ -1,8 +1,11 @@
 import { bufferToHexaString } from "@ledgerhq/device-management-kit";
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 
 @injectable()
 export class DecryptKeyPairUseCase {
@@ -10,7 +13,7 @@ export class DecryptKeyPairUseCase {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    private readonly loggerFactory: Factory<LoggerPublisher>,
+    private readonly loggerFactory: LoggerPublisherFactory,
   ) {
     this.logger = this.loggerFactory("[Decrypt KeyPair Use Case]");
   }

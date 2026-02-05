@@ -2,9 +2,14 @@
  * Shared types for Ledger Agent Payments system
  */
 // =============================================================================
-// Supported Chains (Testnet only for hackathon)
+// Supported Chains
 // =============================================================================
 export const SUPPORTED_CHAINS = {
+    8453: {
+        name: "Base",
+        symbol: "ETH",
+        explorer: "https://basescan.org",
+    },
     11155111: {
         name: "Sepolia",
         symbol: "ETH",
@@ -17,9 +22,16 @@ export const SUPPORTED_CHAINS = {
     },
 };
 // =============================================================================
-// Supported Tokens (Testnet USDC addresses)
+// Supported Tokens
 // =============================================================================
 export const SUPPORTED_TOKENS = {
+    // Base mainnet
+    8453: {
+        USDC: {
+            address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            decimals: 6,
+        },
+    },
     // Sepolia testnet
     11155111: {
         USDC: {

@@ -7,10 +7,15 @@
 		"experimentalDecorators": true,
 		"emitDecoratorMetadata": true,
 		"resolveJsonModule": true,
-		"types": ["node"],
 		"strict": false,
 		"noUncheckedIndexedAccess": false
 	},
 	"include": ["src/**/*.ts"],
-	"exclude": ["src/**/*.test.ts", "src/**/*.spec.ts", "src/**/__mocks__/**/*.ts"]
+	"exclude": [
+		"src/**/*.test.ts",
+		"src/**/*.spec.ts",
+		"src/**/*.mock.ts",
+		"src/**/__mocks__/**/*.ts",
+		"src/**/__tests__/**/*.ts"
+	]
 }

@@ -1,12 +1,11 @@
 import type { KeyPair } from "@ledgerhq/device-trusted-app-kit-ledger-keyring-protocol";
-import type { Factory } from "inversify";
 import { Right } from "purify-ts";
 import { vi } from "vitest";
 
 import type { EncryptKeyPairUseCase } from "../../../cryptographic/usecases/EncryptKeyPairUseCase.js";
 import type { GetEncryptionKeyUseCase } from "../../../cryptographic/usecases/GetEncryptionKey.js";
 import type { GetOrCreateKeyPairUseCase } from "../../../cryptographic/usecases/GetOrCreateKeyPairUseCase.js";
-import type { LoggerPublisher } from "../../../logger/service/LoggerPublisher.js";
+import type { LoggerPublisherFactory } from "../../../logger/service/LoggerPublisher.js";
 import type { StorageService } from "../../StorageService.js";
 import { KeyPairMigrationService } from "./KeypairMigrationService.js";
 
@@ -26,10 +25,10 @@ export const createMockLogger = () => ({
 
 export const createMockLoggerFactory = (
   mockLogger: ReturnType<typeof createMockLogger>,
-): Factory<LoggerPublisher> => {
+): LoggerPublisherFactory => {
   return vi
     .fn()
-    .mockReturnValue(mockLogger) as unknown as Factory<LoggerPublisher>;
+    .mockReturnValue(mockLogger) as unknown as LoggerPublisherFactory;
 };
 
 export const createMockStorageService = () => ({

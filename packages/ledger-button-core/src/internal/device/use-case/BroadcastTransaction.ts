@@ -1,5 +1,5 @@
 import { ethers, Signature } from "ethers";
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 
 import {
   BroadcastedTransactionResult,
@@ -19,7 +19,10 @@ import { getCurrencyIdFromChainId } from "../../blockchain/evm/chainUtils.js";
 import { contextModuleTypes } from "../../context/contextModuleTypes.js";
 import type { ContextService } from "../../context/ContextService.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 
 export type BroadcastTransactionParams = {
   signature: Signature;
@@ -32,7 +35,7 @@ export class BroadcastTransaction {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(backendModuleTypes.BackendService)
     private readonly backendService: BackendService,
     @inject(contextModuleTypes.ContextService)

@@ -1,4 +1,4 @@
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { BehaviorSubject, Observable } from "rxjs";
 
 import { type ContextEvent } from "./model/ContextEvent.js";
@@ -9,7 +9,10 @@ import {
   getCurrencyIdFromChainId,
 } from "../blockchain/evm/chainUtils.js";
 import { loggerModuleTypes } from "../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../logger/service/LoggerPublisher.js";
 import { type ContextService } from "./ContextService.js";
 
 @injectable()
@@ -30,7 +33,7 @@ export class DefaultContextService implements ContextService {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    private readonly loggerFactory: Factory<LoggerPublisher>,
+    private readonly loggerFactory: LoggerPublisherFactory,
   ) {
     this.logger = this.loggerFactory("[Context Service]");
   }

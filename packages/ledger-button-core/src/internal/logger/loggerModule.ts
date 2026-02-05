@@ -1,9 +1,9 @@
-import { ContainerModule, Factory } from "inversify";
+import { ContainerModule } from "inversify";
 
 import { ConsoleLoggerSubscriber } from "./service/ConsoleLoggerSubscriber.js";
 import { DefaultLoggerPublisher } from "./service/DefaultLoggerPublisher.js";
 import { ErrorTrackingLoggerSubscriber } from "./service/ErrorTrackingLoggerSubscriber.js";
-import { LoggerPublisher } from "./service/LoggerPublisher.js";
+import { LoggerPublisherFactory } from "./service/LoggerPublisher.js";
 import { LoggerSubscriber } from "./service/LoggerSubscriber.js";
 import { configModuleTypes } from "../config/configModuleTypes.js";
 import type { Config } from "../config/model/config.js";
@@ -58,7 +58,7 @@ export function loggerModuleFactory({
     }
 
     // NOTE: Can multibind here if we need other types of loggers (exporter, etc)
-    bind<Factory<LoggerPublisher>>(loggerModuleTypes.LoggerPublisher).toFactory(
+    bind<LoggerPublisherFactory>(loggerModuleTypes.LoggerPublisher).toDynamicValue(
       (context) => {
         return (tag: string) => {
           const subscribers = context.getAll<LoggerSubscriber>(

@@ -65,6 +65,11 @@ export interface IntentWebhook {
     timestamp: string;
 }
 export declare const SUPPORTED_CHAINS: {
+    readonly 8453: {
+        readonly name: "Base";
+        readonly symbol: "ETH";
+        readonly explorer: "https://basescan.org";
+    };
     readonly 11155111: {
         readonly name: "Sepolia";
         readonly symbol: "ETH";

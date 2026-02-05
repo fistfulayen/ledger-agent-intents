@@ -13,7 +13,7 @@ import {
   type SignPersonalMessageDAOutput,
 } from "@ledgerhq/device-signer-kit-ethereum";
 import { EthAppCommandError } from "@ledgerhq/device-signer-kit-ethereum/internal/app-binder/command/utils/ethAppErrors.js";
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import {
   BehaviorSubject,
   filter,
@@ -51,7 +51,10 @@ import { DAppConfig } from "../../dAppConfig/dAppConfigTypes.js";
 import { dAppConfigModuleTypes } from "../../dAppConfig/di/dAppConfigModuleTypes.js";
 import type { DAppConfigService } from "../../dAppConfig/service/DAppConfigService.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { storageModuleTypes } from "../../storage/storageModuleTypes.js";
 import type { StorageService } from "../../storage/StorageService.js";
 import { deviceModuleTypes } from "../deviceModuleTypes.js";
@@ -74,7 +77,7 @@ export class SignPersonalMessage {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(deviceModuleTypes.DeviceManagementKitService)
     private readonly deviceManagementKitService: DeviceManagementKitService,
     @inject(storageModuleTypes.StorageService)

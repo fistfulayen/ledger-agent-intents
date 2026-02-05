@@ -9,7 +9,9 @@
 		"build": "tsc",
 		"start": "node dist/index.js",
 		"clean": "rm -rf dist",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test:intent:base-usdc-self": "tsx src/test-intent-base-usdc-self.ts",
+		"test:intent:base-usdc-2": "tsx src/test-intent-base-usdc-2.ts"
 	},
 	"dependencies": {
 		"@agent-intents/shared": "workspace:*",

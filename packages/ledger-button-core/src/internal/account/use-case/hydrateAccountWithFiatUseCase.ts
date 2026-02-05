@@ -1,11 +1,14 @@
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import { type Either } from "purify-ts";
 
 import { balanceModuleTypes } from "../../balance/balanceModuleTypes.js";
 import type { CounterValueDataSource } from "../../balance/datasource/countervalue/CounterValueDataSource.js";
 import type { CounterValueResult } from "../../balance/datasource/countervalue/counterValueTypes.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import type {
   Account,
   AccountWithFiat,
@@ -19,7 +22,7 @@ export class HydrateAccountWithFiatUseCase {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(balanceModuleTypes.CounterValueDataSource)
     private readonly counterValueDataSource: CounterValueDataSource,
   ) {

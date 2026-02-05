@@ -3,10 +3,13 @@ import {
   KeyPair,
   NobleCryptoService,
 } from "@ledgerhq/device-trusted-app-kit-ledger-keyring-protocol";
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 
 @injectable()
 export class GenerateKeyPairUseCase {
@@ -14,7 +17,7 @@ export class GenerateKeyPairUseCase {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
   ) {
     this.logger = loggerFactory("GenerateKeyPairUseCase");
   }

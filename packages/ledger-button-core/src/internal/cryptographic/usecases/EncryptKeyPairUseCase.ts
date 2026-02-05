@@ -3,10 +3,13 @@ import {
   hexaStringToBuffer,
 } from "@ledgerhq/device-management-kit";
 import { KeyPair } from "@ledgerhq/device-trusted-app-kit-ledger-keyring-protocol";
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 
 @injectable()
 export class EncryptKeyPairUseCase {
@@ -14,7 +17,7 @@ export class EncryptKeyPairUseCase {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    private readonly loggerFactory: Factory<LoggerPublisher>,
+    private readonly loggerFactory: LoggerPublisherFactory,
   ) {
     this.logger = this.loggerFactory("[Encrypt KeyPair Use Case]");
   }

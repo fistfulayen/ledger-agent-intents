@@ -124,10 +124,15 @@ export interface IntentWebhook {
 }
 
 // =============================================================================
-// Supported Chains (Testnet only for hackathon)
+// Supported Chains
 // =============================================================================
 
 export const SUPPORTED_CHAINS = {
+	8453: {
+		name: "Base",
+		symbol: "ETH",
+		explorer: "https://basescan.org",
+	},
 	11155111: {
 		name: "Sepolia",
 		symbol: "ETH",
@@ -143,13 +148,20 @@ export const SUPPORTED_CHAINS = {
 export type SupportedChainId = keyof typeof SUPPORTED_CHAINS;
 
 // =============================================================================
-// Supported Tokens (Testnet USDC addresses)
+// Supported Tokens
 // =============================================================================
 
 export const SUPPORTED_TOKENS: Record<
 	SupportedChainId,
 	Record<string, { address: string; decimals: number }>
 > = {
+	// Base mainnet
+	8453: {
+		USDC: {
+			address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+			decimals: 6,
+		},
+	},
 	// Sepolia testnet
 	11155111: {
 		USDC: {

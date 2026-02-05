@@ -1,10 +1,13 @@
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 
 import { NoCompatibleAccountsError } from "../../../api/errors/LedgerSyncErrors.js";
 import { dAppConfigModuleTypes } from "../../dAppConfig/di/dAppConfigModuleTypes.js";
 import { type DAppConfigService } from "../../dAppConfig/service/DAppConfigService.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import { type LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import {
+  type LoggerPublisher,
+  type LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { storageModuleTypes } from "../../storage/storageModuleTypes.js";
 import { type StorageService } from "../../storage/StorageService.js";
 import { accountModuleTypes } from "../accountModuleTypes.js";
@@ -23,7 +26,7 @@ export class DefaultAccountService implements AccountService {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    private readonly loggerFactory: Factory<LoggerPublisher>,
+    private readonly loggerFactory: LoggerPublisherFactory,
     @inject(storageModuleTypes.StorageService)
     private readonly storageService: StorageService,
     @inject(dAppConfigModuleTypes.DAppConfigService)

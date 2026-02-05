@@ -1,5 +1,4 @@
-import { Factory } from 'inversify';
-import { LoggerPublisher } from '../../../logger/service/LoggerPublisher.js';
+import { LoggerPublisherFactory } from '../../../logger/service/LoggerPublisher.js';
 import { StorageService } from '../../StorageService.js';
 import { KeyPairMigrationService } from './KeypairMigrationService.js';
 export declare class MigrateDbUseCase {
@@ -7,7 +6,7 @@ export declare class MigrateDbUseCase {
     private readonly storageService;
     private readonly keyPairMigrationService;
     private logger;
-    constructor(loggerFactory: Factory<LoggerPublisher>, storageService: StorageService, keyPairMigrationService: KeyPairMigrationService);
+    constructor(loggerFactory: LoggerPublisherFactory, storageService: StorageService, keyPairMigrationService: KeyPairMigrationService);
     execute(): Promise<void>;
     /**
      * During the first iteration of the app, the keyPair wasn't encrypted.

@@ -11,7 +11,7 @@ import {
   type SignTypedDataDAState,
 } from "@ledgerhq/device-signer-kit-ethereum";
 import { EthAppCommandError } from "@ledgerhq/device-signer-kit-ethereum/internal/app-binder/command/utils/ethAppErrors.js";
-import { type Factory, inject, injectable } from "inversify";
+import { inject, injectable } from "inversify";
 import {
   BehaviorSubject,
   filter,
@@ -53,7 +53,10 @@ import { eventTrackingModuleTypes } from "../../event-tracking/eventTrackingModu
 import { TrackTypedMessageCompleted } from "../../event-tracking/usecase/TrackTypedMessageCompleted.js";
 import { TrackTypedMessageStarted } from "../../event-tracking/usecase/TrackTypedMessageStarted.js";
 import { loggerModuleTypes } from "../../logger/loggerModuleTypes.js";
-import type { LoggerPublisher } from "../../logger/service/LoggerPublisher.js";
+import type {
+  LoggerPublisher,
+  LoggerPublisherFactory,
+} from "../../logger/service/LoggerPublisher.js";
 import { storageModuleTypes } from "../../storage/storageModuleTypes.js";
 import type { StorageService } from "../../storage/StorageService.js";
 import { deviceModuleTypes } from "../deviceModuleTypes.js";
@@ -70,7 +73,7 @@ export class SignTypedData {
 
   constructor(
     @inject(loggerModuleTypes.LoggerPublisher)
-    loggerFactory: Factory<LoggerPublisher>,
+    loggerFactory: LoggerPublisherFactory,
     @inject(deviceModuleTypes.DeviceManagementKitService)
     private readonly deviceManagementKitService: DeviceManagementKitService,
     @inject(storageModuleTypes.StorageService)
