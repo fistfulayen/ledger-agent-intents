@@ -17,7 +17,7 @@
 	"files": ["dist"],
 	"scripts": {
 		"build:styles": "mkdir -p dist && tailwindcss -i ./src/styles.css -o ./dist/styles.css --postcss",
-		"build": "pnpm build:styles && vite build",
+		"build": "pnpm build:styles && vite build && node ../../scripts/patch-ledger-provider-dist.mjs dist/index.js",
 		"dev": "vite build --watch",
 		"dev:styles": "tailwindcss -i ./src/styles.css -o ./dist/styles.css --postcss --watch",
 		"typecheck": "tsc --noEmit"

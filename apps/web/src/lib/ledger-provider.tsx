@@ -86,10 +86,16 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 						floatingButtonPosition: false,
 						dAppIdentifier: "multisig",
 						apiKey: import.meta.env.VITE_LEDGER_API_KEY || "",
-						rpcUrls: {
-							// Base mainnet (optional override for fee estimation / nonce / etc.)
-							"8453": import.meta.env.VITE_BASE_MAINNET_RPC_URL,
-						},
+						// IMPORTANT: do not pass `undefined` values (can cause runtime errors in downstream code)
+						// Base mainnet override for fee estimation / nonce / etc.
+						rpcUrls: (() => {
+							const out: Record<string, string> = {};
+							const baseMainnet = import.meta.env.VITE_BASE_MAINNET_RPC_URL;
+							if (typeof baseMainnet === "string" && baseMainnet.trim().length > 0) {
+								out["8453"] = baseMainnet.trim();
+							}
+							return out;
+						})(),
 						loggerLevel: "info",
 						devConfig: useStubDAppConfig
 							? {

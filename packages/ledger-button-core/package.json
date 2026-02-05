@@ -15,7 +15,7 @@
 	},
 	"files": ["dist"],
 	"scripts": {
-		"build": "vite build",
+		"build": "vite build && node ../../scripts/patch-ledger-provider-dist.mjs dist/index.js",
 		"dev": "vite build --watch",
 		"typecheck": "tsc --noEmit"
 	},

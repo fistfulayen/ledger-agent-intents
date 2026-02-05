@@ -7641,7 +7641,7 @@ let Hz = class {
     return { getDeviceMetadata: async () => {
       var n;
       const t = e.getDeviceSessionState();
-      return t.sessionStateType === wr.Connected || ((n = t.firmwareVersion) == null ? void 0 : n.metadata) === void 0 || t.firmwareUpdateContext === void 0 || t.customImage === void 0 || t.installedApps.length === 0 || t.appsUpdates === void 0 || t.installedLanguages === void 0 || t.catalog === void 0 ? null : { firmwareVersion: t.firmwareVersion, firmwareUpdateContext: t.firmwareUpdateContext, customImage: t.customImage, applications: t.installedApps, applicationsUpdates: t.appsUpdates, installedLanguages: t.installedLanguages, catalog: t.catalog };
+      return t.sessionStateType === wr.Connected || ((n = t.firmwareVersion) == null ? void 0 : n.metadata) === void 0 || t.firmwareUpdateContext === void 0 || t.customImage === void 0 || t.installedApps === void 0 || t.installedApps.length === 0 || t.appsUpdates === void 0 || t.installedLanguages === void 0 || t.catalog === void 0 ? null : { firmwareVersion: t.firmwareVersion, firmwareUpdateContext: t.firmwareUpdateContext, customImage: t.customImage, applications: t.installedApps, applicationsUpdates: t.appsUpdates, installedLanguages: t.installedLanguages, catalog: t.catalog };
     }, getFirmwareMetadata: async () => new Mz(e).run(), getApplicationsMetadata: async (t) => new Lz(e, { deviceVersion: t.input.deviceVersion, firmware: t.input.firmware, firmwareVersion: t.input.firmwareVersion, installedApps: t.input.installedApps }).run(), listAppsSecureChannel: (t) => {
       const { firmware: n, firmwareVersion: i } = t.input, s = e.getSecureChannelService().listInstalledApps(i.metadata, n);
       return new ZL(e, { connection: s }).run();
