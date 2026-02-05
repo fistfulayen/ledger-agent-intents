@@ -11,6 +11,7 @@ interface TrustchainMemberRow {
 	member_pubkey: string;
 	role: TrustchainMemberRole;
 	label: string | null;
+	authorization_signature: string | null;
 	created_at: Date;
 	revoked_at: Date | null;
 }
@@ -36,12 +37,13 @@ export async function registerAgent(params: {
 	memberPubkey: string;
 	role?: TrustchainMemberRole;
 	label?: string;
+	authorizationSignature?: string;
 }): Promise<TrustchainMember> {
-	const { trustchainId, memberPubkey, role = "agent_write_only", label } = params;
+	const { trustchainId, memberPubkey, role = "agent_write_only", label, authorizationSignature } = params;
 
 	const result = await sql`
-    INSERT INTO trustchain_members (trustchain_id, member_pubkey, role, label)
-    VALUES (${trustchainId}, ${memberPubkey}, ${role}, ${label ?? null})
+    INSERT INTO trustchain_members (trustchain_id, member_pubkey, role, label, authorization_signature)
+    VALUES (${trustchainId}, ${memberPubkey}, ${role}, ${label ?? null}, ${authorizationSignature ?? null})
     RETURNING *
   `;
 

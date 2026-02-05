@@ -221,6 +221,8 @@ export interface RegisterAgentRequest {
 	trustChainId: string;
 	agentLabel: string;
 	agentPublicKey: string; // Hex-encoded secp256k1 compressed public key (from LKRP NobleCryptoService)
+	/** EIP-191 personal_sign signature authorizing this agent key, signed on the Ledger device */
+	authorizationSignature: string;
 }
 
 /** Response from POST /api/agents/register */

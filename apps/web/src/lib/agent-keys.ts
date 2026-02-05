@@ -106,6 +106,28 @@ export function downloadAgentCredential(credential: AgentCredentialFile): void {
 }
 
 // =============================================================================
+// Device Authorization (EIP-191 personal_sign on Ledger)
+// =============================================================================
+
+/**
+ * Build the EIP-191 message the user signs on their Ledger device to
+ * authorize a new agent key.  Both frontend and backend MUST use this
+ * exact format so the recovered address matches.
+ */
+export function buildAuthorizationMessage(params: {
+	agentPublicKey: string;
+	agentLabel: string;
+	trustchainId: string;
+}): string {
+	return [
+		"Authorize agent key for Ledger Agent Payments",
+		`Key: ${params.agentPublicKey}`,
+		`Label: ${params.agentLabel}`,
+		`Identity: ${params.trustchainId}`,
+	].join("\n");
+}
+
+// =============================================================================
 // Agent Request Signing (used by the agent to authenticate API calls)
 // =============================================================================
 

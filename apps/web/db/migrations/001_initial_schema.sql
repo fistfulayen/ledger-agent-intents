@@ -24,6 +24,10 @@ CREATE TABLE IF NOT EXISTS trustchain_members (
   -- User-friendly label (e.g. "Auto-Compounder Bot")
   label TEXT,
 
+  -- EIP-191 personal_sign signature from the Ledger device authorizing this key.
+  -- Stored as proof that the device owner approved the agent provisioning.
+  authorization_signature TEXT,
+
   -- Lifecycle timestamps
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   revoked_at TIMESTAMPTZ

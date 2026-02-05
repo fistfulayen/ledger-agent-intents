@@ -7,6 +7,7 @@ import {
 	generateAgentKeyPair,
 	buildAgentCredentialFile,
 	downloadAgentCredential,
+	buildAuthorizationMessage,
 	type AgentKeyMaterial,
 } from "@/lib/agent-keys";
 import { agentsQueryOptions, useRegisterAgent, useRevokeAgent } from "@/queries/agents";
@@ -205,13 +206,14 @@ function AgentManagementSection() {
 // Provision Agent Form
 // =============================================================================
 
-type ProvisionStep = "label" | "generating" | "download";
+type ProvisionStep = "label" | "generating" | "signing" | "registering" | "download";
 
 function ProvisionAgentForm(props: {
 	trustchainId: string;
 	onClose: () => void;
 }) {
 	const { trustchainId, onClose } = props;
+	const { signTypedDataV4, account } = useLedger();
 
 	const [step, setStep] = useState<ProvisionStep>("label");
 	const [label, setLabel] = useState("");
@@ -230,11 +232,55 @@ function ProvisionAgentForm(props: {
 			const km = await generateAgentKeyPair();
 			setKeyMaterial(km);
 
-			// 2. Register on backend (no separate signature needed)
+			// 2. Ask user to authorize on Ledger device (EIP-191 personal_sign)
+			setStep("signing");
+			const agentLabel = label || "Unnamed Agent";
+			const message = buildAuthorizationMessage({
+				agentPublicKey: km.publicKeyHex,
+				agentLabel,
+				trustchainId,
+			});
+
+			// personal_sign via the EIP-1193 provider
+			const provider = (document.querySelector("ledger-button-app") as HTMLElement & {
+				_eip6963Provider?: { provider: { request: (args: { method: string; params: unknown[] }) => Promise<unknown> } };
+			})?._eip6963Provider?.provider;
+
+			let signature: string;
+			if (provider) {
+				// Use the raw provider for personal_sign
+				signature = (await provider.request({
+					method: "personal_sign",
+					params: [
+						`0x${Array.from(new TextEncoder().encode(message))
+							.map((b) => b.toString(16).padStart(2, "0"))
+							.join("")}`,
+						account,
+					],
+				})) as string;
+			} else {
+				// Fallback: use signTypedDataV4 won't work for personal_sign,
+				// so we try the global ethereum provider
+				const eth = (window as unknown as { ethereum?: { request: (args: { method: string; params: unknown[] }) => Promise<unknown> } }).ethereum;
+				if (!eth) throw new Error("No wallet provider available for signing");
+				signature = (await eth.request({
+					method: "personal_sign",
+					params: [
+						`0x${Array.from(new TextEncoder().encode(message))
+							.map((b) => b.toString(16).padStart(2, "0"))
+							.join("")}`,
+						account,
+					],
+				})) as string;
+			}
+
+			// 3. Register on backend with device signature
+			setStep("registering");
 			await registerAgent.mutateAsync({
 				trustChainId: trustchainId,
-				agentLabel: label || "Unnamed Agent",
+				agentLabel,
 				agentPublicKey: km.publicKeyHex,
+				authorizationSignature: signature,
 			});
 
 			setStep("download");
@@ -243,7 +289,7 @@ function ProvisionAgentForm(props: {
 			setError(message);
 			setStep("label");
 		}
-	}, [trustchainId, label, registerAgent]);
+	}, [trustchainId, label, registerAgent, account, signTypedDataV4]);
 
 	const handleDownload = useCallback(() => {
 		if (!keyMaterial) return;
@@ -303,14 +349,40 @@ function ProvisionAgentForm(props: {
 				</div>
 			)}
 
-			{/* Step: Generating */}
+			{/* Step: Generating keypair */}
 			{step === "generating" && (
 				<div className="flex flex-col items-center gap-16 py-16">
 					<Spinner size="lg" />
 					<div className="flex flex-col items-center gap-4">
 						<p className="body-1-semi-bold text-base">Generating agent key</p>
 						<p className="body-2 text-muted">
-							Creating LKRP keypair and registering with backend...
+							Creating LKRP keypair...
+						</p>
+					</div>
+				</div>
+			)}
+
+			{/* Step: Waiting for device signature */}
+			{step === "signing" && (
+				<div className="flex flex-col items-center gap-16 py-16">
+					<Spinner size="lg" />
+					<div className="flex flex-col items-center gap-4">
+						<p className="body-1-semi-bold text-base">Approve on your Ledger</p>
+						<p className="body-2 text-muted">
+							Check your Ledger device and sign the authorization message
+						</p>
+					</div>
+				</div>
+			)}
+
+			{/* Step: Registering on backend */}
+			{step === "registering" && (
+				<div className="flex flex-col items-center gap-16 py-16">
+					<Spinner size="lg" />
+					<div className="flex flex-col items-center gap-4">
+						<p className="body-1-semi-bold text-base">Registering agent</p>
+						<p className="body-2 text-muted">
+							Saving agent key to the backend...
 						</p>
 					</div>
 				</div>

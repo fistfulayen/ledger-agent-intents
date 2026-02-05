@@ -166,8 +166,10 @@ Agents authenticate using **secp256k1 keypairs** generated via LKRP's `NobleCryp
 1. Open the web app and connect your Ledger device
 2. Go to **Settings > Agent Keys**
 3. Click **New Agent Key**, enter a name
-4. A keypair is generated client-side using LKRP crypto and the public key is registered on the backend
-5. **Download the credential file** — it contains the private key and will not be shown again
+4. A keypair is generated client-side using LKRP crypto (`NobleCryptoService`)
+5. **Approve on your Ledger device** — you'll see an authorization message on screen and must sign it (`personal_sign`)
+6. The backend verifies the device signature matches your wallet address before registering the key
+7. **Download the credential file** — it contains the private key and will not be shown again
 
 The downloaded file looks like:
 

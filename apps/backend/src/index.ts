@@ -199,21 +199,49 @@ app.patch("/api/intents/:id/status", (req, res) => {
 
 // ============ Agent Provisioning ============
 
-// Register a new agent
-app.post("/api/agents/register", (req, res) => {
+// Register a new agent (with device signature verification)
+app.post("/api/agents/register", async (req, res) => {
 	try {
-		const { trustChainId, agentPublicKey, agentLabel } = req.body as {
+		const { trustChainId, agentPublicKey, agentLabel, authorizationSignature } = req.body as {
 			trustChainId?: string;
 			agentPublicKey?: string;
 			agentLabel?: string;
+			authorizationSignature?: string;
 		};
 
-		if (!trustChainId || !agentPublicKey) {
-			res.status(400).json({ success: false, error: "Missing required fields: trustChainId, agentPublicKey" });
+		if (!trustChainId || !agentPublicKey || !authorizationSignature) {
+			res.status(400).json({ success: false, error: "Missing required fields: trustChainId, agentPublicKey, authorizationSignature" });
 			return;
 		}
 
 		const pubkey = agentPublicKey.toLowerCase();
+		const label = agentLabel || "Unnamed Agent";
+
+		// Verify device authorization signature (EIP-191 personal_sign)
+		try {
+			const { recoverMessageAddress } = await import("viem");
+			const message = [
+				"Authorize agent key for Ledger Agent Payments",
+				`Key: ${agentPublicKey}`,
+				`Label: ${label}`,
+				`Identity: ${trustChainId}`,
+			].join("\n");
+
+			const recovered = await recoverMessageAddress({
+				message,
+				signature: authorizationSignature as `0x${string}`,
+			});
+
+			if (recovered.toLowerCase() !== trustChainId.toLowerCase()) {
+				res.status(403).json({ success: false, error: "Authorization signature does not match the connected wallet" });
+				return;
+			}
+		} catch (err) {
+			console.error("[Agent Registration] Signature verification failed:", err);
+			res.status(400).json({ success: false, error: "Invalid authorization signature" });
+			return;
+		}
+
 		const existing = Array.from(agents.values()).find(
 			(a) => a.memberPubkey === pubkey && !a.revokedAt,
 		);
@@ -227,13 +255,13 @@ app.post("/api/agents/register", (req, res) => {
 			trustchainId: trustChainId.toLowerCase(),
 			memberPubkey: pubkey,
 			role: "agent_write_only",
-			label: agentLabel || "Unnamed Agent",
+			label,
 			createdAt: new Date().toISOString(),
 			revokedAt: null,
 		};
 		agents.set(member.id, member);
 
-		console.log(`[Agent Registered] ${member.id} "${member.label}" for trustchain ${member.trustchainId}`);
+		console.log(`[Agent Registered] ${member.id} "${member.label}" for trustchain ${member.trustchainId} (device-authorized)`);
 		res.status(201).json({ success: true, member });
 	} catch (error) {
 		console.error("Error registering agent:", error);
