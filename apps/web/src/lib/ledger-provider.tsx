@@ -125,8 +125,11 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 		if (!provider?.provider.on) return;
 
 		const handleAccountsChanged = (accounts: unknown) => {
-			const accts = accounts as string[];
-			setAccount(accts[0] || null);
+			if (!Array.isArray(accounts)) {
+				setAccount(null);
+				return;
+			}
+			setAccount((accounts[0] as string | undefined) || null);
 		};
 
 		const handleChainChanged = (chainIdHex: unknown) => {
@@ -155,14 +158,16 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 		setError(null);
 
 		try {
-			const accounts = (await provider.provider.request({
+			const accountsRaw = await provider.provider.request({
 				method: "eth_requestAccounts",
 				params: [],
-			})) as string[];
+			});
 
-		if (accounts.length > 0 && accounts[0]) {
-			setAccount(accounts[0]);
-		}
+			const accounts = Array.isArray(accountsRaw) ? (accountsRaw as string[]) : [];
+
+			if (accounts.length > 0 && accounts[0]) {
+				setAccount(accounts[0]);
+			}
 
 			const chain = (await provider.provider.request({
 				method: "eth_chainId",

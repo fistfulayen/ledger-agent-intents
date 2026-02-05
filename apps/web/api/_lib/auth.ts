@@ -24,7 +24,9 @@ export function parseCookieHeader(cookieHeader: string | undefined): Record<stri
 }
 
 export function setSessionCookie(res: VercelResponse, sessionId: string, expiresAt: Date) {
-	const isProd = process.env.NODE_ENV === "production";
+	const nodeEnv = (globalThis as unknown as { process?: { env?: { NODE_ENV?: string } } })
+		.process?.env?.NODE_ENV;
+	const isProd = nodeEnv === "production";
 	const cookie = [
 		`${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionId)}`,
 		"Path=/",
@@ -37,7 +39,9 @@ export function setSessionCookie(res: VercelResponse, sessionId: string, expires
 }
 
 export function clearSessionCookie(res: VercelResponse) {
-	const isProd = process.env.NODE_ENV === "production";
+	const nodeEnv = (globalThis as unknown as { process?: { env?: { NODE_ENV?: string } } })
+		.process?.env?.NODE_ENV;
+	const isProd = nodeEnv === "production";
 	const cookie = [
 		`${SESSION_COOKIE_NAME}=`,
 		"Path=/",
