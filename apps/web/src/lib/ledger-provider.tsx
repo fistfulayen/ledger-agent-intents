@@ -283,6 +283,22 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				params: [hexMessage, account],
 			})) as string;
 
+			// Dismiss the Ledger Button success modal so it doesn't block the UI.
+			// The SDK sometimes leaves its "Message successfully signed" overlay open.
+			requestAnimationFrame(() => {
+				const modal = document.querySelector("ledger-core-modal");
+				if (modal?.shadowRoot) {
+					const closeBtn = modal.shadowRoot.querySelector<HTMLElement>(
+						"button, [data-dismiss], .close-button, [aria-label='Close']",
+					);
+					closeBtn?.click();
+				}
+				// Fallback: remove the modal element entirely if click didn't work
+				setTimeout(() => {
+					document.querySelector("ledger-core-modal")?.remove();
+				}, 300);
+			});
+
 			return signature;
 		},
 		[provider, account],
