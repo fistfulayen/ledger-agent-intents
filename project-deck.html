@@ -1,0 +1,1265 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Ledger Agent Payments — Deck</title>
+		<meta
+			name="description"
+			content="Ledger Agent Payments: agents propose, humans sign with hardware."
+		/>
+		<style>
+			:root {
+				--bg0: #07090f;
+				--bg1: #0b1020;
+				--card: rgba(255, 255, 255, 0.06);
+				--card2: rgba(255, 255, 255, 0.1);
+				--border: rgba(255, 255, 255, 0.12);
+				--text: rgba(255, 255, 255, 0.92);
+				--muted: rgba(255, 255, 255, 0.66);
+				--muted2: rgba(255, 255, 255, 0.5);
+				--accent: #75f4c2;
+				--accent2: #65a7ff;
+				--warn: #ffdf6e;
+				--danger: #ff6a7a;
+				--ok: #69ff9a;
+				--shadow: 0 18px 55px rgba(0, 0, 0, 0.5);
+				--radius: 18px;
+				--mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+					"Liberation Mono", "Courier New", monospace;
+				--sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto,
+					Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html,
+			body {
+				height: 100%;
+			}
+
+			body {
+				margin: 0;
+				color: var(--text);
+				font-family: var(--sans);
+				background:
+					radial-gradient(1200px 700px at 18% 22%, rgba(117, 244, 194, 0.18), transparent 60%),
+					radial-gradient(900px 600px at 78% 30%, rgba(101, 167, 255, 0.16), transparent 58%),
+					radial-gradient(900px 650px at 55% 85%, rgba(255, 223, 110, 0.08), transparent 60%),
+					linear-gradient(180deg, var(--bg0), var(--bg1));
+				overflow: hidden;
+			}
+
+			a {
+				color: inherit;
+				text-decoration: none;
+				border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+			}
+
+			a:hover {
+				border-bottom-color: rgba(255, 255, 255, 0.65);
+			}
+
+			.deck {
+				position: relative;
+				height: 100%;
+				width: 100%;
+				display: grid;
+				place-items: center;
+				padding: 36px;
+			}
+
+			.slide {
+				width: min(1160px, 94vw);
+				height: min(680px, 88vh);
+				border: 1px solid var(--border);
+				border-radius: var(--radius);
+				background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+				box-shadow: var(--shadow);
+				padding: 46px 54px;
+				display: none;
+				position: relative;
+				overflow: hidden;
+			}
+
+			.slide.active {
+				display: block;
+				animation: in 220ms ease-out;
+			}
+
+			@keyframes in {
+				from {
+					opacity: 0;
+					transform: translateY(8px);
+				}
+				to {
+					opacity: 1;
+					transform: translateY(0);
+				}
+			}
+
+			.kicker {
+				display: inline-flex;
+				gap: 10px;
+				align-items: center;
+				font-size: 13px;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				color: var(--muted);
+				margin-bottom: 16px;
+			}
+
+			.pill {
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+				padding: 7px 12px;
+				border-radius: 999px;
+				border: 1px solid var(--border);
+				background: rgba(255, 255, 255, 0.05);
+				font-size: 12px;
+				color: var(--muted);
+			}
+
+			.h1 {
+				font-size: 56px;
+				line-height: 1.04;
+				letter-spacing: -0.03em;
+				margin: 10px 0 10px;
+			}
+
+			.h2 {
+				font-size: 40px;
+				line-height: 1.08;
+				letter-spacing: -0.02em;
+				margin: 10px 0 12px;
+			}
+
+			.h3 {
+				font-size: 24px;
+				line-height: 1.2;
+				margin: 6px 0 10px;
+				letter-spacing: -0.01em;
+			}
+
+			.p {
+				font-size: 18px;
+				line-height: 1.5;
+				color: var(--muted);
+				margin: 10px 0 0;
+				max-width: 86ch;
+			}
+
+			.small {
+				font-size: 14px;
+				line-height: 1.45;
+				color: var(--muted2);
+				margin: 8px 0 0;
+			}
+
+			.grid {
+				display: grid;
+				grid-template-columns: 1.2fr 0.8fr;
+				gap: 26px;
+				margin-top: 26px;
+				align-items: stretch;
+			}
+
+			.grid.equal {
+				grid-template-columns: 1fr 1fr;
+			}
+
+			.card {
+				border: 1px solid var(--border);
+				border-radius: 16px;
+				background: rgba(0, 0, 0, 0.18);
+				padding: 18px 18px 16px;
+			}
+
+			.card.soft {
+				background: rgba(255, 255, 255, 0.04);
+			}
+
+			.list {
+				margin: 10px 0 0;
+				padding: 0 0 0 18px;
+				color: var(--muted);
+				font-size: 17px;
+				line-height: 1.52;
+			}
+
+			.list li {
+				margin: 6px 0;
+			}
+
+			strong {
+				color: var(--text);
+				font-weight: 650;
+			}
+
+			.highlight {
+				color: var(--text);
+				background: linear-gradient(
+					90deg,
+					rgba(117, 244, 194, 0.18),
+					rgba(101, 167, 255, 0.14)
+				);
+				border: 1px solid rgba(255, 255, 255, 0.14);
+				padding: 0 8px 2px;
+				border-radius: 999px;
+				white-space: nowrap;
+			}
+
+			.code {
+				font-family: var(--mono);
+				font-size: 13.5px;
+				line-height: 1.55;
+				color: rgba(255, 255, 255, 0.82);
+				background: rgba(0, 0, 0, 0.25);
+				border: 1px solid rgba(255, 255, 255, 0.12);
+				border-radius: 14px;
+				padding: 14px 14px;
+				overflow: auto;
+				white-space: pre;
+			}
+
+			.footer {
+				position: absolute;
+				left: 18px;
+				right: 18px;
+				bottom: 14px;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 12px;
+				color: var(--muted2);
+				font-size: 12px;
+			}
+
+			.progress {
+				flex: 1;
+				height: 6px;
+				background: rgba(255, 255, 255, 0.1);
+				border-radius: 999px;
+				overflow: hidden;
+				border: 1px solid rgba(255, 255, 255, 0.12);
+			}
+
+			.progress > div {
+				height: 100%;
+				width: 0%;
+				background: linear-gradient(90deg, var(--accent), var(--accent2));
+				border-radius: 999px;
+				transition: width 180ms ease-out;
+			}
+
+			.badge {
+				display: inline-flex;
+				gap: 8px;
+				align-items: center;
+				border-radius: 999px;
+				border: 1px solid rgba(255, 255, 255, 0.14);
+				padding: 7px 12px;
+				background: rgba(255, 255, 255, 0.05);
+				color: rgba(255, 255, 255, 0.76);
+				font-size: 13px;
+			}
+
+			.dot {
+				width: 8px;
+				height: 8px;
+				border-radius: 999px;
+				background: var(--accent);
+				box-shadow: 0 0 0 5px rgba(117, 244, 194, 0.14);
+			}
+
+			.dot.blue {
+				background: var(--accent2);
+				box-shadow: 0 0 0 5px rgba(101, 167, 255, 0.14);
+			}
+
+			.dot.warn {
+				background: var(--warn);
+				box-shadow: 0 0 0 5px rgba(255, 223, 110, 0.14);
+			}
+
+			.dot.danger {
+				background: var(--danger);
+				box-shadow: 0 0 0 5px rgba(255, 106, 122, 0.14);
+			}
+
+			.split {
+				display: grid;
+				grid-template-columns: 1fr 1fr 1fr;
+				gap: 14px;
+				margin-top: 18px;
+			}
+
+			.kpi {
+				padding: 16px 16px 14px;
+				border-radius: 16px;
+				border: 1px solid var(--border);
+				background: rgba(255, 255, 255, 0.04);
+			}
+
+			.kpi .label {
+				font-size: 12px;
+				text-transform: uppercase;
+				letter-spacing: 0.09em;
+				color: var(--muted2);
+			}
+
+			.kpi .value {
+				font-size: 34px;
+				margin-top: 8px;
+				letter-spacing: -0.02em;
+			}
+
+			.kpi .note {
+				font-size: 13px;
+				color: var(--muted);
+				margin-top: 6px;
+				line-height: 1.4;
+			}
+
+			.arch {
+				width: 100%;
+				border-radius: 16px;
+				border: 1px solid rgba(255, 255, 255, 0.14);
+				background: rgba(0, 0, 0, 0.2);
+				padding: 12px;
+				margin-top: 14px;
+			}
+
+			.notes {
+				position: absolute;
+				left: 18px;
+				right: 18px;
+				bottom: 58px;
+				padding: 14px 14px;
+				border-radius: 14px;
+				border: 1px dashed rgba(255, 255, 255, 0.18);
+				background: rgba(0, 0, 0, 0.24);
+				color: rgba(255, 255, 255, 0.72);
+				font-size: 13px;
+				line-height: 1.45;
+				display: none;
+			}
+
+			body.show-notes .notes {
+				display: block;
+			}
+
+			.hint {
+				position: fixed;
+				left: 16px;
+				top: 16px;
+				display: flex;
+				gap: 10px;
+				align-items: center;
+				color: rgba(255, 255, 255, 0.62);
+				font-size: 12px;
+				padding: 8px 10px;
+				border-radius: 999px;
+				border: 1px solid rgba(255, 255, 255, 0.14);
+				background: rgba(0, 0, 0, 0.25);
+				backdrop-filter: blur(8px);
+				user-select: none;
+			}
+
+			.hint kbd {
+				font-family: var(--mono);
+				font-size: 11px;
+				padding: 3px 6px;
+				border-radius: 8px;
+				border: 1px solid rgba(255, 255, 255, 0.16);
+				background: rgba(255, 255, 255, 0.06);
+				color: rgba(255, 255, 255, 0.82);
+			}
+
+			/* Overview mode */
+			body.overview {
+				overflow: auto;
+			}
+			body.overview .deck {
+				align-items: start;
+				place-items: start;
+				grid-auto-rows: min-content;
+				padding: 24px;
+			}
+			body.overview .slide {
+				display: block;
+				height: auto;
+				min-height: 240px;
+				padding: 22px 22px 46px;
+				cursor: pointer;
+				margin-bottom: 16px;
+			}
+			body.overview .h1 {
+				font-size: 32px;
+			}
+			body.overview .h2 {
+				font-size: 26px;
+			}
+			body.overview .grid,
+			body.overview .split {
+				grid-template-columns: 1fr;
+			}
+			body.overview .notes {
+				display: none !important;
+			}
+
+			/* Print mode */
+			@media print {
+				body {
+					overflow: visible;
+					background: white;
+					color: black;
+				}
+				.hint {
+					display: none;
+				}
+				.deck {
+					padding: 0;
+					display: block;
+				}
+				.slide {
+					display: block !important;
+					page-break-after: always;
+					box-shadow: none;
+					border: 1px solid #ddd;
+					background: white;
+					color: black;
+				}
+				.p,
+				.list,
+				.small {
+					color: #333;
+				}
+				.code {
+					color: #111;
+					border-color: #ddd;
+					background: #f6f6f6;
+				}
+				.footer,
+				.notes {
+					display: none !important;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="hint" aria-hidden="true">
+			<span>Navigate</span>
+			<kbd>←</kbd><kbd>→</kbd>
+			<span style="opacity: 0.55">·</span>
+			<span>Overview</span>
+			<kbd>O</kbd>
+			<span style="opacity: 0.55">·</span>
+			<span>Notes</span>
+			<kbd>N</kbd>
+			<span style="opacity: 0.55">·</span>
+			<span>Print</span>
+			<kbd>Ctrl/⌘</kbd><kbd>P</kbd>
+		</div>
+
+		<main class="deck" id="deck">
+			<section class="slide" data-title="Title">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> Ledger Agent Payments</span>
+					<span class="pill"><span class="dot blue"></span> USDC Hackathon · Feb 2026</span>
+				</div>
+				<h1 class="h1">Agents propose.<br />Humans sign with hardware.</h1>
+				<p class="p">
+					A secure bridge between AI agents and blockchain transactions: agents draft and propose
+					payments, but <span class="highlight">only you</span> approve and sign—on Ledger.
+				</p>
+				<div class="grid equal" style="margin-top: 30px">
+					<div class="card soft">
+						<div class="h3">The promise</div>
+						<ul class="list">
+							<li>AI handles the work: discovery, negotiation, scheduling, bookkeeping.</li>
+							<li>You keep the keys: trusted display + physical confirmation.</li>
+							<li>USDC becomes the unit of account for the agent economy.</li>
+						</ul>
+					</div>
+					<div class="card soft">
+						<div class="h3">The slogan</div>
+						<div class="code">"Your agent has root access. Your keys don't."</div>
+						<p class="small">
+							This deck is a product story first, then a technical deep dive at the end.
+						</p>
+					</div>
+				</div>
+				<div class="notes">
+					Open with the simplest framing: we’re building the “permission layer” for agent spending.
+					The key is: agent can suggest anything; user can approve or reject on hardware.
+				</div>
+			</section>
+
+			<section class="slide" data-title="The moment">
+				<div class="kicker">
+					<span class="pill"><span class="dot warn"></span> The moment</span>
+				</div>
+				<h2 class="h2">AI agents are ready to act.<br />Money isn’t ready for agents.</h2>
+				<div class="grid equal">
+					<div class="card">
+						<div class="h3">Agents can already</div>
+						<ul class="list">
+							<li>Find vendors, compare prices, and negotiate.</li>
+							<li>Extract invoices from emails and calculate totals.</li>
+							<li>Call APIs, run jobs, and ship digital deliverables.</li>
+						</ul>
+					</div>
+					<div class="card">
+						<div class="h3">But payment is the cliff</div>
+						<ul class="list">
+							<li><strong>Private keys + autonomy</strong> is a catastrophic combo.</li>
+							<li>Prompt injection or compromised tools become “empty the wallet”.</li>
+							<li>And humans need an <strong>audit trail</strong>, not a vibe.</li>
+						</ul>
+					</div>
+				</div>
+				<div class="notes">
+					Keep it concrete: “agents are already operating your browser and email”. The missing piece
+					is safe money movement.
+				</div>
+			</section>
+
+			<section class="slide" data-title="The problem">
+				<div class="kicker">
+					<span class="pill"><span class="dot danger"></span> The problem</span>
+				</div>
+				<h2 class="h2">Agents need to spend.<br />But agents can’t hold keys.</h2>
+				<p class="p">
+					If an agent can sign transactions, then a single failure mode (prompt injection, stolen
+					token, malicious plugin) becomes irreversible loss.
+				</p>
+				<div class="grid equal">
+					<div class="card soft">
+						<div class="h3">What breaks today</div>
+						<ul class="list">
+							<li>“Approve this” dialogs without context.</li>
+							<li>Opaque hex payloads; users can’t reason about risk.</li>
+							<li>Automation without accountability: no durable trail.</li>
+						</ul>
+					</div>
+					<div class="card soft">
+						<div class="h3">What users need</div>
+						<ul class="list">
+							<li><strong>Trusted display</strong>: amount, recipient, chain, reason.</li>
+							<li><strong>Intent mediation</strong>: propose now, sign later.</li>
+							<li><strong>Controls</strong>: approve / reject, with a recorded history.</li>
+						</ul>
+					</div>
+				</div>
+				<div class="notes">
+					The core is separation of duties: agent is the “planner”; Ledger is the “executor”.
+				</div>
+			</section>
+
+			<section class="slide" data-title="The solution">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> The solution</span>
+					<span class="pill"><span class="dot blue"></span> Intent Queue + Hardware Signing</span>
+				</div>
+				<h2 class="h2">A queue of intents.<br />A human-grade signing gate.</h2>
+				<p class="p">
+					Agents create <strong>structured intents</strong> (who/what/why). Humans review the same
+					structure and sign with Ledger when it’s correct.
+				</p>
+				<div class="arch" aria-label="High level architecture diagram">
+					<svg viewBox="0 0 1000 260" width="100%" height="auto" role="img">
+						<defs>
+							<linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+								<stop offset="0" stop-color="#75f4c2" stop-opacity="0.9" />
+								<stop offset="1" stop-color="#65a7ff" stop-opacity="0.9" />
+							</linearGradient>
+							<filter id="s" x="-20%" y="-20%" width="140%" height="140%">
+								<feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity="0.35" />
+							</filter>
+						</defs>
+						<g font-family="ui-sans-serif, system-ui" fill="rgba(255,255,255,0.92)">
+							<g filter="url(#s)">
+								<rect x="40" y="56" rx="16" ry="16" width="250" height="140" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.22)" />
+								<text x="70" y="100" font-size="18" font-weight="650">AI Agent</text>
+								<text x="70" y="128" font-size="14" fill="rgba(255,255,255,0.72)">drafts & proposes</text>
+								<text x="70" y="154" font-size="13" fill="rgba(255,255,255,0.66)">no key access</text>
+							</g>
+							<g filter="url(#s)">
+								<rect x="375" y="56" rx="16" ry="16" width="250" height="140" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.22)" />
+								<text x="405" y="100" font-size="18" font-weight="650">Intent Queue</text>
+								<text x="405" y="128" font-size="14" fill="rgba(255,255,255,0.72)">pending txns + audit</text>
+								<text x="405" y="154" font-size="13" fill="rgba(255,255,255,0.66)">clear intent details</text>
+							</g>
+							<g filter="url(#s)">
+								<rect x="710" y="56" rx="16" ry="16" width="250" height="140" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.22)" />
+								<text x="740" y="100" font-size="18" font-weight="650">Ledger Signer</text>
+								<text x="740" y="128" font-size="14" fill="rgba(255,255,255,0.72)">review + approve</text>
+								<text x="740" y="154" font-size="13" fill="rgba(255,255,255,0.66)">signs on hardware</text>
+							</g>
+
+							<path d="M290 126 L375 126" stroke="url(#g)" stroke-width="4" />
+							<polygon points="368,118 368,134 384,126" fill="url(#g)" />
+
+							<path d="M625 126 L710 126" stroke="url(#g)" stroke-width="4" />
+							<polygon points="703,118 703,134 719,126" fill="url(#g)" />
+						</g>
+					</svg>
+				</div>
+				<div class="notes">
+					This is the one-line product: Intent Queue + Ledger signing. Emphasize “propose now, sign
+					later”.
+				</div>
+			</section>
+
+			<section class="slide" data-title="What is an Intent?">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> The primitive</span>
+				</div>
+				<h2 class="h2">An Intent is a payment request with context.</h2>
+				<p class="p">
+					Not “sign this hex”. An intent is a typed payload with clear fields: amount, token,
+					recipient, chain, memo, urgency—and optional x402 metadata for API payments.
+				</p>
+				<div class="grid equal">
+					<div class="card">
+						<div class="h3">Minimal fields</div>
+						<ul class="list">
+							<li><strong>Who</strong>: agentId / agentName, userId</li>
+							<li><strong>What</strong>: token, amount, recipient, chainId</li>
+							<li><strong>Why</strong>: memo, category, merchant</li>
+							<li><strong>How urgent</strong>: urgency + expiration</li>
+						</ul>
+					</div>
+					<div class="card">
+						<div class="h3">Why it matters</div>
+						<ul class="list">
+							<li>Human review becomes fast and reliable.</li>
+							<li>Ledger signing becomes “clear signing”.</li>
+							<li>We can add rules later without changing the UX model.</li>
+						</ul>
+					</div>
+				</div>
+				<div class="notes">
+					Set up the “policy layer”: once intents are structured, you can do risk scoring, limits,
+					multi-approval, etc.
+				</div>
+			</section>
+
+			<section class="slide" data-title="The demo">
+				<div class="kicker">
+					<span class="pill"><span class="dot blue"></span> The demo</span>
+				</div>
+				<h2 class="h2">A one-minute story.</h2>
+				<div class="grid equal">
+					<div class="card soft">
+						<div class="h3">User</div>
+						<ul class="list">
+							<li>“Clouseau, pay 50 USDC to Seth for the podcast intro music.”</li>
+							<li>Opens the app, sees a pending intent with full context.</li>
+							<li>Approves & signs on Ledger.</li>
+						</ul>
+					</div>
+					<div class="card soft">
+						<div class="h3">System</div>
+						<ul class="list">
+							<li>Agent creates an intent (no keys).</li>
+							<li>Intent sits pending until human action.</li>
+							<li>Status updates: pending → approved/signed → confirmed.</li>
+						</ul>
+					</div>
+				</div>
+				<div class="notes">
+					One minute. Keep it visceral. Then you can zoom out: this generalizes to payroll, invoices,
+					API payments.
+				</div>
+			</section>
+
+			<section class="slide" data-title="Why USDC">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> Why USDC</span>
+				</div>
+				<h2 class="h2">USDC is the currency of agent commerce.</h2>
+				<div class="grid equal">
+					<div class="card">
+						<div class="h3">Why stable matters</div>
+						<ul class="list">
+							<li>Agents reason in dollars: budgets, invoices, pricing.</li>
+							<li>Stable settlement enables recurring and business flows.</li>
+							<li>Lower cognitive load for human approval.</li>
+						</ul>
+					</div>
+					<div class="card">
+						<div class="h3">Where this goes</div>
+						<ul class="list">
+							<li>Agent-to-agent marketplaces (bounties, escrow).</li>
+							<li>API micropayments (x402-style pay-per-call).</li>
+							<li>Operational rails (payroll, reimbursements).</li>
+						</ul>
+					</div>
+				</div>
+				<div class="notes">
+					This keeps us aligned with hackathon judging: USDC settlement + OpenClaw skills.
+				</div>
+			</section>
+
+			<section class="slide" data-title="North star">
+				<div class="kicker">
+					<span class="pill"><span class="dot warn"></span> North star</span>
+				</div>
+				<h2 class="h2">The best agent spending experience feels boring.</h2>
+				<p class="p">
+					Boring means: obvious intent, obvious risk, minimal steps, and a permanent record.
+				</p>
+				<div class="split">
+					<div class="kpi">
+						<div class="label">Key metric</div>
+						<div class="value">&lt; 2 min</div>
+						<div class="note">Intent-to-Sign time for common payments.</div>
+					</div>
+					<div class="kpi">
+						<div class="label">Trust model</div>
+						<div class="value">0 keys</div>
+						<div class="note">Agents never touch private keys or seed phrases.</div>
+					</div>
+					<div class="kpi">
+						<div class="label">Outcome</div>
+						<div class="value">Audit</div>
+						<div class="note">A timeline of every proposed and executed action.</div>
+					</div>
+				</div>
+				<div class="notes">
+					This slide is a reframing: speed *and* safety. The metric is straight from PRODUCT_ANALYSIS.
+				</div>
+			</section>
+
+			<section class="slide" data-title="Use cases">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> Use cases</span>
+				</div>
+				<h2 class="h2">Start with payments that already exist.</h2>
+				<p class="p">
+					We win by shipping the simplest “pay someone” flows first, then layering recurring,
+					batching, and rules.
+				</p>
+				<div class="grid equal">
+					<div class="card">
+						<div class="h3">Phase 1 (MVP)</div>
+						<ul class="list">
+							<li>Podcast/creator payments</li>
+							<li>Newsletter subscriptions (recurring)</li>
+							<li>Agent hiring agent (marketplace)</li>
+						</ul>
+					</div>
+					<div class="card">
+						<div class="h3">Phase 2+</div>
+						<ul class="list">
+							<li>Payroll runs (batch signing)</li>
+							<li>Contractor invoice processing</li>
+							<li>Expense reimbursements</li>
+						</ul>
+					</div>
+				</div>
+				<div class="notes">
+					Prioritize what’s highest-frequency and easiest to validate. Then expand into high-volume
+					business operations.
+				</div>
+			</section>
+
+			<section class="slide" data-title="What we built">
+				<div class="kicker">
+					<span class="pill"><span class="dot blue"></span> What exists in this repo</span>
+				</div>
+				<h2 class="h2">A working end-to-end skeleton.</h2>
+				<div class="grid">
+					<div class="card soft">
+						<div class="h3">Core components</div>
+						<ul class="list">
+							<li><strong>Intent API</strong>: create, list, update status</li>
+							<li><strong>Intent store</strong>: Postgres (Vercel) + status history</li>
+							<li><strong>Web UI</strong>: view & approve intents</li>
+							<li><strong>Ledger integration</strong>: EIP-6963 provider + tx signing</li>
+							<li><strong>Shared types</strong>: `@agent-intents/shared`</li>
+						</ul>
+					</div>
+					<div class="card soft">
+						<div class="h3">Two deployment modes</div>
+						<ul class="list">
+							<li><strong>Vercel functions</strong> under <span class="highlight">apps/web/api</span> (with Postgres)</li>
+							<li><strong>Express dev backend</strong> under <span class="highlight">apps/backend</span> (in-memory)</li>
+						</ul>
+						<p class="small">
+							This deck’s technical section will show both, but treats Vercel+Postgres as the
+							reference implementation.
+						</p>
+					</div>
+				</div>
+				<div class="notes">
+					This is important: we have a production-shaped backend in apps/web/api, and a hackathon-friendly
+					backend in apps/backend.
+				</div>
+			</section>
+
+			<section class="slide" data-title="Technical: repo layout">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> Technical</span>
+					<span class="pill"><span class="dot blue"></span> Monorepo</span>
+				</div>
+				<h2 class="h2">Monorepo architecture.</h2>
+				<div class="grid equal">
+					<div class="card">
+						<div class="h3">Workspace</div>
+						<div class="code">ledger-agent-intents/
+  apps/
+    backend/        # Express API (dev / in-memory)
+    web/            # Vite + React + Vercel API + Postgres
+  packages/
+    shared/         # Intent types, helpers (explorer URLs, etc.)
+    skill/          # Agent CLI: ledger-intent (OpenClaw skill)
+  turbo.json        # build/dev orchestration (pnpm)</div>
+					</div>
+					<div class="card">
+						<div class="h3">Stack</div>
+						<ul class="list">
+							<li><strong>Frontend</strong>: React 19 + TanStack Router + TanStack Query</li>
+							<li><strong>API</strong>: Vercel Functions (`@vercel/node`)</li>
+							<li><strong>DB</strong>: Vercel Postgres (`@vercel/postgres`)</li>
+							<li><strong>Ledger</strong>: `@ledgerhq/ledger-wallet-provider` (EIP-6963)</li>
+							<li><strong>Tooling</strong>: Vite, TypeScript, Biome, Turborepo</li>
+						</ul>
+					</div>
+				</div>
+				<div class="notes">
+					We’re leaning into a clean separation: shared types, API routes, UI. This makes it easy to
+					deploy and easy to evolve.
+				</div>
+			</section>
+
+			<section class="slide" data-title="Technical: API surface">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> Technical</span>
+					<span class="pill"><span class="dot blue"></span> API surface</span>
+				</div>
+				<h2 class="h2">A tiny REST API designed for agents.</h2>
+				<div class="grid equal">
+					<div class="card">
+						<div class="h3">Endpoints</div>
+						<div class="code">GET   /api/health
+POST  /api/intents
+GET   /api/intents/:id
+GET   /api/users/:userId/intents?status=pending&limit=50
+PATCH /api/intents/:id/status</div>
+						<p class="small">
+							Implemented as Vercel functions in <span class="highlight">apps/web/api</span>.
+						</p>
+					</div>
+					<div class="card">
+						<div class="h3">Status lifecycle</div>
+						<ul class="list">
+							<li><strong>pending</strong> → created by agent</li>
+							<li><strong>approved</strong> / <strong>rejected</strong> → human review</li>
+							<li><strong>signed</strong> → signature present (tx hash optional)</li>
+							<li><strong>confirmed</strong> → chain confirmation</li>
+							<li><strong>failed</strong> / <strong>expired</strong> → terminal outcomes</li>
+						</ul>
+					</div>
+				</div>
+				<div class="notes">
+					The surface area is intentionally small. The “status history” gives us auditability and
+					product analytics (intent-to-sign time).
+				</div>
+			</section>
+
+			<section class="slide" data-title="Technical: data model">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> Technical</span>
+					<span class="pill"><span class="dot blue"></span> Data model</span>
+				</div>
+				<h2 class="h2">Intents are rows + a status history timeline.</h2>
+				<div class="grid equal">
+					<div class="card">
+						<div class="h3">Tables (conceptually)</div>
+						<ul class="list">
+							<li><strong>intents</strong>: `id`, `user_id`, `agent_id`, `agent_name`, `details`, `urgency`, timestamps</li>
+							<li><strong>intent_status_history</strong>: `intent_id`, `status`, `timestamp`, `note`</li>
+						</ul>
+						<p class="small">
+							In `apps/web/api/_lib/intentsRepo.ts` we also persist optional x402 proof data by embedding
+							it into the JSON `details` blob.
+						</p>
+					</div>
+					<div class="card">
+						<div class="h3">Why status history matters</div>
+						<ul class="list">
+							<li>Audit trail (who did what, when).</li>
+							<li>UX: show progress and context for decisions.</li>
+							<li>Analytics: compute Intent-to-Sign time and drop-off.</li>
+						</ul>
+					</div>
+				</div>
+				<div class="notes">
+					Emphasize: it’s not “just a queue”. The history is the compliance / accountability layer.
+				</div>
+			</section>
+
+			<section class="slide" data-title="Technical: signing">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> Technical</span>
+					<span class="pill"><span class="dot blue"></span> Signing</span>
+				</div>
+				<h2 class="h2">Ledger integration via an EIP-6963 provider.</h2>
+				<div class="grid equal">
+					<div class="card">
+						<div class="h3">What the web app does</div>
+						<ul class="list">
+							<li>Discovers a Ledger provider via EIP-6963 announcements.</li>
+							<li>Connects accounts (`eth_requestAccounts`).</li>
+							<li>Signs & sends tx (`eth_sendTransaction`) or typed data (`eth_signTypedData_v4`).</li>
+						</ul>
+					</div>
+					<div class="card">
+						<div class="h3">Why this is the right seam</div>
+						<ul class="list">
+							<li>The signing UI remains trusted (Ledger-controlled).</li>
+							<li>We can upgrade encoding/clear signing without changing the intent model.</li>
+							<li>Supports “on-chain tx hash” and “off-chain authorization signature” (x402-style).</li>
+						</ul>
+					</div>
+				</div>
+				<div class="notes">
+					We deliberately keep chain interactions behind the Ledger provider: the UI orchestrates, the
+					hardware confirms.
+				</div>
+			</section>
+
+			<section class="slide" data-title="Technical: end-to-end architecture">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> Technical</span>
+					<span class="pill"><span class="dot blue"></span> Architecture</span>
+				</div>
+				<h2 class="h2">End-to-end data flow.</h2>
+				<p class="p">
+					This is the “agent proposes, human signs” pipeline as implemented in the repo today.
+				</p>
+				<div class="arch">
+					<svg viewBox="0 0 1100 470" width="100%" height="auto" role="img" aria-label="Detailed architecture diagram">
+						<defs>
+							<linearGradient id="g2" x1="0" y1="0" x2="1" y2="0">
+								<stop offset="0" stop-color="#75f4c2" stop-opacity="0.9" />
+								<stop offset="1" stop-color="#65a7ff" stop-opacity="0.9" />
+							</linearGradient>
+							<linearGradient id="g3" x1="0" y1="0" x2="0" y2="1">
+								<stop offset="0" stop-color="#ffffff" stop-opacity="0.08" />
+								<stop offset="1" stop-color="#ffffff" stop-opacity="0.03" />
+							</linearGradient>
+						</defs>
+
+						<g font-family="ui-sans-serif, system-ui" fill="rgba(255,255,255,0.9)">
+							<!-- Nodes -->
+							<rect x="40" y="48" width="310" height="120" rx="16" fill="url(#g3)" stroke="rgba(255,255,255,0.18)" />
+							<text x="70" y="86" font-size="18" font-weight="650">AI Agent / Skill CLI</text>
+							<text x="70" y="112" font-size="13" fill="rgba(255,255,255,0.7)">POST /api/intents</text>
+							<text x="70" y="136" font-size="13" fill="rgba(255,255,255,0.62)">poll GET /api/intents/:id</text>
+
+							<rect x="410" y="40" width="330" height="140" rx="16" fill="url(#g3)" stroke="rgba(255,255,255,0.18)" />
+							<text x="440" y="78" font-size="18" font-weight="650">Intent API</text>
+							<text x="440" y="104" font-size="13" fill="rgba(255,255,255,0.7)">Vercel Functions (apps/web/api)</text>
+							<text x="440" y="128" font-size="13" fill="rgba(255,255,255,0.62)">createIntent / getIntent / updateStatus</text>
+							<text x="440" y="152" font-size="13" fill="rgba(255,255,255,0.62)">CORS + JSON helpers</text>
+
+							<rect x="800" y="48" width="260" height="120" rx="16" fill="url(#g3)" stroke="rgba(255,255,255,0.18)" />
+							<text x="830" y="86" font-size="18" font-weight="650">Vercel Postgres</text>
+							<text x="830" y="112" font-size="13" fill="rgba(255,255,255,0.7)">intents + status history</text>
+							<text x="830" y="136" font-size="13" fill="rgba(255,255,255,0.62)">JSON details (x402 optional)</text>
+
+							<rect x="40" y="260" width="310" height="150" rx="16" fill="url(#g3)" stroke="rgba(255,255,255,0.18)" />
+							<text x="70" y="298" font-size="18" font-weight="650">Web App (React)</text>
+							<text x="70" y="324" font-size="13" fill="rgba(255,255,255,0.7)">lists intents, shows details</text>
+							<text x="70" y="348" font-size="13" fill="rgba(255,255,255,0.62)">approves / rejects</text>
+							<text x="70" y="372" font-size="13" fill="rgba(255,255,255,0.62)">requests signing</text>
+
+							<rect x="410" y="272" width="330" height="138" rx="16" fill="url(#g3)" stroke="rgba(255,255,255,0.18)" />
+							<text x="440" y="310" font-size="18" font-weight="650">Ledger Provider</text>
+							<text x="440" y="336" font-size="13" fill="rgba(255,255,255,0.7)">EIP-6963 discovery</text>
+							<text x="440" y="360" font-size="13" fill="rgba(255,255,255,0.62)">eth_sendTransaction / eth_signTypedData_v4</text>
+
+							<rect x="800" y="260" width="260" height="150" rx="16" fill="url(#g3)" stroke="rgba(255,255,255,0.18)" />
+							<text x="830" y="298" font-size="18" font-weight="650">Ledger Device</text>
+							<text x="830" y="324" font-size="13" fill="rgba(255,255,255,0.7)">trusted display</text>
+							<text x="830" y="348" font-size="13" fill="rgba(255,255,255,0.62)">human confirmation</text>
+							<text x="830" y="372" font-size="13" fill="rgba(255,255,255,0.62)">signature / tx hash</text>
+
+							<!-- Arrows -->
+							<path d="M350 108 L410 108" stroke="url(#g2)" stroke-width="4" />
+							<polygon points="403,100 403,116 419,108" fill="url(#g2)" />
+
+							<path d="M740 108 L800 108" stroke="url(#g2)" stroke-width="4" />
+							<polygon points="793,100 793,116 809,108" fill="url(#g2)" />
+
+							<path d="M350 332 L410 332" stroke="url(#g2)" stroke-width="4" />
+							<polygon points="403,324 403,340 419,332" fill="url(#g2)" />
+
+							<path d="M740 332 L800 332" stroke="url(#g2)" stroke-width="4" />
+							<polygon points="793,324 793,340 809,332" fill="url(#g2)" />
+
+							<path d="M195 260 L195 172" stroke="rgba(255,255,255,0.22)" stroke-width="3" stroke-dasharray="6 6" />
+							<polygon points="187,179 203,179 195,163" fill="rgba(255,255,255,0.24)" />
+
+							<!-- Legend -->
+							<text x="40" y="448" font-size="12" fill="rgba(255,255,255,0.62)">
+								Solid arrows: primary request flow · Dotted arrow: UI reads from API
+							</text>
+						</g>
+					</svg>
+				</div>
+				<p class="small">
+					Alternative dev mode: <span class="highlight">apps/backend</span> runs the same API as an
+					Express server with an in-memory Map (useful for fast local demos).
+				</p>
+				<div class="notes">
+					This is the “real” architecture as in code: Vercel functions + Postgres + React + Ledger
+					provider. Mention the Express backend as a dev fallback.
+				</div>
+			</section>
+
+			<section class="slide" data-title="Technical: security model">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> Technical</span>
+					<span class="pill"><span class="dot blue"></span> Security model</span>
+				</div>
+				<h2 class="h2">Threat model: assume the agent is compromised.</h2>
+				<div class="grid equal">
+					<div class="card">
+						<div class="h3">What an attacker can do</div>
+						<ul class="list">
+							<li>Create malicious intents (wrong recipient, wrong chain, wrong amount).</li>
+							<li>Spam intents to induce fatigue.</li>
+							<li>Try to remove context (“just sign this”).</li>
+						</ul>
+					</div>
+					<div class="card">
+						<div class="h3">What they can’t do</div>
+						<ul class="list">
+							<li>Sign without the Ledger device + human confirmation.</li>
+							<li>Bypass the trusted signing UI.</li>
+							<li>Erase the audit trail (status history) without server access.</li>
+						</ul>
+					</div>
+				</div>
+				<p class="small">
+					Next hardening steps (not required for the hackathon): rules/limits, rate limiting,
+					signature requirements for agents, and “high-risk” warnings.
+				</p>
+				<div class="notes">
+					The key is that compromise of the agent is survivable. Human approval is the safety boundary.
+				</div>
+			</section>
+
+			<section class="slide" data-title="Close">
+				<div class="kicker">
+					<span class="pill"><span class="dot"></span> Close</span>
+				</div>
+				<h2 class="h2">The agent economy needs a seatbelt.</h2>
+				<p class="p">
+					Ledger Agent Payments is the bridge: structured intent proposals + a hardware signing gate.
+					It’s how we unlock agent commerce without handing autonomy the keys.
+				</p>
+				<div class="grid equal" style="margin-top: 24px">
+					<div class="card soft">
+						<div class="h3">What we ship next</div>
+						<ul class="list">
+							<li>Real ERC-20 transfer encoding for USDC</li>
+							<li>Batch signing & recurring intents</li>
+							<li>Rules: limits, risk scoring, multi-approval</li>
+						</ul>
+					</div>
+					<div class="card soft">
+						<div class="h3">One-liner</div>
+						<div class="code">Agents propose, humans sign with hardware.</div>
+						<p class="small">
+							Open this file in a browser and present with arrows. For an overview grid, press <span class="highlight">O</span>.
+						</p>
+					</div>
+				</div>
+				<div class="notes">
+					End with the why: this is the missing primitive for safe autonomous spending.
+				</div>
+			</section>
+		</main>
+
+		<script>
+			(() => {
+				const slides = Array.from(document.querySelectorAll(".slide"));
+				const deck = document.getElementById("deck");
+
+				const state = {
+					index: 0,
+				};
+
+				function clamp(n, min, max) {
+					return Math.max(min, Math.min(max, n));
+				}
+
+				function parseIndexFromHash() {
+					const h = window.location.hash || "";
+					const m = h.match(/slide-(\d+)/);
+					if (!m) return null;
+					const idx = Number.parseInt(m[1], 10);
+					return Number.isFinite(idx) ? idx : null;
+				}
+
+				function ensureFooter(slide, i) {
+					let footer = slide.querySelector(".footer");
+					if (!footer) {
+						footer = document.createElement("div");
+						footer.className = "footer";
+						footer.innerHTML = `
+              <div class="badge"><span class="dot blue"></span><span class="title"></span></div>
+              <div class="progress" aria-hidden="true"><div></div></div>
+              <div class="count"></div>
+            `;
+						slide.appendChild(footer);
+					}
+					const title =
+						slide.getAttribute("data-title") || `Slide ${i + 1}`;
+					footer.querySelector(".title").textContent = title;
+					footer.querySelector(".count").textContent = `${i + 1} / ${
+						slides.length
+					}`;
+				}
+
+				function render() {
+					const i = clamp(state.index, 0, slides.length - 1);
+					state.index = i;
+
+					for (let s = 0; s < slides.length; s++) {
+						const slide = slides[s];
+						ensureFooter(slide, s);
+						slide.classList.toggle("active", s === i);
+
+						const progress = slide.querySelector(".progress > div");
+						if (progress) {
+							const pct =
+								slides.length <= 1 ? 100 : (i / (slides.length - 1)) * 100;
+							progress.style.width = `${pct}%`;
+						}
+					}
+
+					const hash = `#slide-${i}`;
+					if (window.location.hash !== hash) {
+						history.replaceState(null, "", hash);
+					}
+				}
+
+				function go(delta) {
+					state.index = clamp(state.index + delta, 0, slides.length - 1);
+					render();
+				}
+
+				function set(i) {
+					state.index = clamp(i, 0, slides.length - 1);
+					render();
+				}
+
+				// Init from hash
+				const idx = parseIndexFromHash();
+				if (idx !== null) state.index = clamp(idx, 0, slides.length - 1);
+
+				// Print-friendly view via ?print=1
+				const params = new URLSearchParams(window.location.search);
+				if (params.get("print") === "1") {
+					document.body.classList.add("overview");
+				}
+
+				render();
+
+				window.addEventListener("hashchange", () => {
+					const i = parseIndexFromHash();
+					if (i !== null) set(i);
+				});
+
+				window.addEventListener("keydown", (e) => {
+					if (e.defaultPrevented) return;
+					if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+					switch (e.key) {
+						case "ArrowRight":
+						case " ":
+						case "PageDown":
+							e.preventDefault();
+							go(1);
+							break;
+						case "ArrowLeft":
+						case "Backspace":
+						case "PageUp":
+							e.preventDefault();
+							go(-1);
+							break;
+						case "Home":
+							e.preventDefault();
+							set(0);
+							break;
+						case "End":
+							e.preventDefault();
+							set(slides.length - 1);
+							break;
+						case "o":
+						case "O":
+							e.preventDefault();
+							document.body.classList.toggle("overview");
+							// In overview, show all slides; when leaving, re-render current.
+							if (!document.body.classList.contains("overview")) render();
+							break;
+						case "n":
+						case "N":
+							e.preventDefault();
+							document.body.classList.toggle("show-notes");
+							break;
+					}
+				});
+
+				// Click navigation: next slide (or pick slide in overview)
+				deck.addEventListener("click", (e) => {
+					const targetSlide = e.target.closest(".slide");
+					if (!targetSlide) return;
+					if (document.body.classList.contains("overview")) {
+						const i = slides.indexOf(targetSlide);
+						document.body.classList.remove("overview");
+						set(i);
+						return;
+					}
+					go(1);
+				});
+
+				// Basic swipe
+				let touchStartX = null;
+				window.addEventListener(
+					"touchstart",
+					(e) => {
+						const t = e.touches && e.touches[0];
+						if (!t) return;
+						touchStartX = t.clientX;
+					},
+					{ passive: true }
+				);
+				window.addEventListener(
+					"touchend",
+					(e) => {
+						if (touchStartX === null) return;
+						const t = e.changedTouches && e.changedTouches[0];
+						if (!t) return;
+						const dx = t.clientX - touchStartX;
+						touchStartX = null;
+						if (Math.abs(dx) < 50) return;
+						if (dx < 0) go(1);
+						else go(-1);
+					},
+					{ passive: true }
+				);
+			})();
+		</script>
+	</body>
+</html>

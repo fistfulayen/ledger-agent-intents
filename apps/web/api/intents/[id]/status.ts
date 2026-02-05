@@ -3,7 +3,7 @@
  * PATCH /api/intents/:id/status
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import type { IntentStatus } from "@agent-intents/shared";
+import type { IntentStatus, X402PaymentPayload, X402SettlementReceipt } from "@agent-intents/shared";
 import { methodRouter, jsonSuccess, jsonError, parseBody } from "../../_lib/http.js";
 import { updateIntentStatus } from "../../_lib/intentsRepo.js";
 
@@ -11,6 +11,9 @@ interface UpdateStatusBody {
 	status: IntentStatus;
 	txHash?: string;
 	note?: string;
+	paymentSignatureHeader?: string;
+	paymentPayload?: X402PaymentPayload;
+	settlementReceipt?: X402SettlementReceipt;
 }
 
 const VALID_STATUSES: IntentStatus[] = [
@@ -18,6 +21,7 @@ const VALID_STATUSES: IntentStatus[] = [
 	"approved",
 	"rejected",
 	"signed",
+	"authorized", // x402 payment authorization ready for agent
 	"confirmed",
 	"failed",
 	"expired",
@@ -45,6 +49,9 @@ export default methodRouter({
 			status: body.status,
 			txHash: body.txHash,
 			note: body.note,
+			paymentSignatureHeader: body.paymentSignatureHeader,
+			paymentPayload: body.paymentPayload,
+			settlementReceipt: body.settlementReceipt,
 		});
 
 		if (!intent) {

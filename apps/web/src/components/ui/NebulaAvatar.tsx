@@ -52,9 +52,9 @@ function lerpColor(a: string, b: string, t: number): string {
 		if (match) {
 			return {
 				type: "hsl" as const,
-				h: Number.parseInt(match[1], 10),
-				s: Number.parseInt(match[2], 10),
-				l: Number.parseInt(match[3], 10),
+				h: Number.parseInt(match[1] ?? "0", 10),
+				s: Number.parseInt(match[2] ?? "0", 10),
+				l: Number.parseInt(match[3] ?? "0", 10),
 			};
 		}
 		return null;
@@ -72,12 +72,15 @@ function lerpColor(a: string, b: string, t: number): string {
 	}
 
 	// Fallback for hex colors
-	const parseHex = (hex: string) => {
+	const parseHex = (hex: string): [number, number, number] => {
 		const h = hex.replace("#", "");
+		const r = Number.parseInt(h.slice(0, 2), 16);
+		const g = Number.parseInt(h.slice(2, 4), 16);
+		const bl = Number.parseInt(h.slice(4, 6), 16);
 		return [
-			Number.parseInt(h.slice(0, 2), 16),
-			Number.parseInt(h.slice(2, 4), 16),
-			Number.parseInt(h.slice(4, 6), 16),
+			Number.isFinite(r) ? r : 0,
+			Number.isFinite(g) ? g : 0,
+			Number.isFinite(bl) ? bl : 0,
 		];
 	};
 

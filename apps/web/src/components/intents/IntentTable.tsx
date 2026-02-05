@@ -3,16 +3,38 @@ import { Spinner } from "@/components/ui/Spinner";
 import { encodeERC20Transfer } from "@/lib/erc20";
 import { useLedger } from "@/lib/ledger-provider";
 import { cn, formatAddress } from "@/lib/utils";
+import {
+	parseEip155ChainId,
+	validateX402ForSigning,
+	isValidEvmAddress,
+} from "@/lib/x402-validation";
 import { useUpdateIntentStatus } from "@/queries/intents";
 import {
 	type Intent,
 	SUPPORTED_CHAINS,
 	SUPPORTED_TOKENS,
 	type SupportedChainId,
+	type X402PaymentPayload,
 } from "@agent-intents/shared";
 import { Button } from "@ledgerhq/lumen-ui-react";
 import { useState } from "react";
+import { verifyTypedData } from "viem";
 import { IntentDetailDialog } from "./IntentDetailDialog";
+
+function base64EncodeUtf8(input: string) {
+	const bytes = new TextEncoder().encode(input);
+	let binary = "";
+	for (const b of bytes) binary += String.fromCharCode(b);
+	return btoa(binary);
+}
+
+function randomNonce32BytesHex() {
+	const bytes = new Uint8Array(32);
+	crypto.getRandomValues(bytes);
+	return `0x${Array.from(bytes)
+		.map((b) => b.toString(16).padStart(2, "0"))
+		.join("")}`;
+}
 
 // =============================================================================
 // Types
@@ -185,7 +207,7 @@ function LoadingRow() {
 // =============================================================================
 
 function IntentRow({ intent, onSelectIntent }: IntentRowProps) {
-	const { chainId: walletChainId, sendTransaction, account } = useLedger();
+	const { chainId: walletChainId, sendTransaction, signTypedDataV4, account } = useLedger();
 	const updateStatus = useUpdateIntentStatus();
 
 	const [isSigning, setIsSigning] = useState(false);
@@ -206,6 +228,7 @@ function IntentRow({ intent, onSelectIntent }: IntentRowProps) {
 		(details.tokenAddress as `0x${string}` | undefined) ??
 		(tokenInfo?.address as `0x${string}` | undefined);
 	const tokenDecimals = tokenInfo?.decimals ?? 6;
+	const isX402 = !!details.x402?.accepted;
 
 	// Format intent ID (first 8 chars)
 	const shortId = intent.id.slice(0, 8);
@@ -217,6 +240,168 @@ function IntentRow({ intent, onSelectIntent }: IntentRowProps) {
 	const handleSign = async () => {
 		setError(null);
 
+		// x402 path: sign an EIP-712 authorization (EIP-3009)
+		if (isX402) {
+			if (!account) {
+				setError("Connect your Ledger device to authorize this payment");
+				return;
+			}
+
+			// Validate account address
+			if (!isValidEvmAddress(account)) {
+				setError("Invalid wallet address");
+				return;
+			}
+
+			const x402 = details.x402;
+
+			// Strong validation of x402 requirements
+			const validation = validateX402ForSigning(x402?.resource, x402?.accepted);
+			if (!validation.valid) {
+				setError(validation.error ?? "Invalid x402 payment requirements");
+				return;
+			}
+
+			// At this point x402, resource, and accepted are guaranteed to exist
+			const resource = x402!.resource;
+			const accepted = x402!.accepted;
+
+			const chainId = parseEip155ChainId(accepted.network);
+			if (!chainId) {
+				setError(`Unsupported x402 network: ${accepted.network}`);
+				return;
+			}
+
+			// Require wallet to be on the correct chain
+			if (walletChainId === null) {
+				setError("Wallet must be connected to sign");
+				return;
+			}
+			if (walletChainId !== chainId) {
+				setError(
+					`Switch to ${SUPPORTED_CHAINS[chainId as SupportedChainId]?.name ?? `Chain ${chainId}`} to authorize this API payment`,
+				);
+				return;
+			}
+
+			const nowSec = Math.floor(Date.now() / 1000);
+			const timeout = accepted.maxTimeoutSeconds ?? 300; // 5 minutes default
+			const authorization = {
+				from: account,
+				to: accepted.payTo,
+				value: accepted.amount,
+				validAfter: String(nowSec),
+				validBefore: String(nowSec + timeout),
+				nonce: randomNonce32BytesHex(),
+			};
+
+			// Build EIP-712 typed data for TransferWithAuthorization (EIP-3009)
+			// Note: extra.name and extra.version are required (validated above)
+			const domain = {
+				name: accepted.extra!.name,
+				version: accepted.extra!.version,
+				chainId: BigInt(chainId),
+				verifyingContract: accepted.asset as `0x${string}`,
+			};
+
+			const types = {
+				TransferWithAuthorization: [
+					{ name: "from", type: "address" },
+					{ name: "to", type: "address" },
+					{ name: "value", type: "uint256" },
+					{ name: "validAfter", type: "uint256" },
+					{ name: "validBefore", type: "uint256" },
+					{ name: "nonce", type: "bytes32" },
+				],
+			} as const;
+
+			const message = {
+				from: account as `0x${string}`,
+				to: accepted.payTo as `0x${string}`,
+				value: BigInt(accepted.amount),
+				validAfter: BigInt(authorization.validAfter),
+				validBefore: BigInt(authorization.validBefore),
+				nonce: authorization.nonce as `0x${string}`,
+			};
+
+			// Format for eth_signTypedData_v4 (includes EIP712Domain type)
+			const typedDataForSign = {
+				types: {
+					EIP712Domain: [
+						{ name: "name", type: "string" },
+						{ name: "version", type: "string" },
+						{ name: "chainId", type: "uint256" },
+						{ name: "verifyingContract", type: "address" },
+					],
+					...types,
+				},
+				primaryType: "TransferWithAuthorization" as const,
+				domain: {
+					...domain,
+					chainId: Number(domain.chainId),
+				},
+				message: {
+					...authorization,
+					value: authorization.value,
+				},
+			};
+
+			setIsSigning(true);
+			try {
+				const signature = await signTypedDataV4(typedDataForSign);
+
+				// Verify the signature locally before persisting
+				const isValid = await verifyTypedData({
+					address: account as `0x${string}`,
+					domain,
+					types,
+					primaryType: "TransferWithAuthorization",
+					message,
+					signature: signature as `0x${string}`,
+				});
+
+				if (!isValid) {
+					setError("Signature verification failed");
+					return;
+				}
+
+				const paymentPayload: X402PaymentPayload = {
+					x402Version: 2,
+					resource,
+					accepted,
+					payload: { signature, authorization },
+					extensions: {},
+				};
+
+				const paymentSignatureHeader = base64EncodeUtf8(JSON.stringify(paymentPayload));
+
+				await updateStatus.mutateAsync({
+					id: intent.id,
+					status: "authorized", // x402 payment authorized
+					paymentSignatureHeader,
+					paymentPayload,
+				});
+			} catch (err) {
+				const message = err instanceof Error ? err.message : "Signature failed";
+				const lowerMessage = message.toLowerCase();
+				const isUserRejection =
+					lowerMessage.includes("reject") ||
+					lowerMessage.includes("cancel") ||
+					lowerMessage.includes("denied") ||
+					lowerMessage.includes("user");
+				if (isUserRejection) {
+					setError("Authorization cancelled");
+				} else {
+					setError(message);
+				}
+			} finally {
+				setIsSigning(false);
+			}
+
+			return;
+		}
+
+		// Check chain mismatch for standard transfers
 		if (isWrongChain) {
 			setError(`Please switch to ${chain?.name ?? "the correct network"} to sign`);
 			return;

@@ -464,16 +464,21 @@ function DocsPage() {
 										appearance: "accent",
 										desc: "Human approved, ready to sign",
 									},
-									{
-										status: "signed",
-										appearance: "accent",
-										desc: "Signed, broadcasting tx",
-									},
-									{
-										status: "confirmed",
-										appearance: "success",
-										desc: "Transaction confirmed",
-									},
+								{
+									status: "signed",
+									appearance: "accent",
+									desc: "Signed, broadcasting tx",
+								},
+								{
+									status: "authorized",
+									appearance: "success",
+									desc: "x402 payment authorized",
+								},
+								{
+									status: "confirmed",
+									appearance: "success",
+									desc: "Transaction confirmed",
+								},
 									{
 										status: "rejected",
 										appearance: "error",
@@ -550,7 +555,7 @@ function DocsPage() {
 							<Param
 								name="status"
 								type="string"
-								description="Filter by status: 'pending' | 'approved' | 'signed' | 'confirmed' | 'rejected' | 'failed' | 'expired'"
+								description="Filter by status: 'pending' | 'approved' | 'signed' | 'authorized' | 'confirmed' | 'rejected' | 'failed' | 'expired'"
 							/>
 						</div>
 					</Subsection>

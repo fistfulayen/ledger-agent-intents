@@ -7,7 +7,8 @@ export type IntentStatus =
 	| "pending" // Created by agent, awaiting human review
 	| "approved" // Human approved, ready to sign
 	| "rejected" // Human rejected
-	| "signed" // Signed on device, broadcasting
+	| "signed" // Signed on device, broadcasting (for on-chain transactions)
+	| "authorized" // x402 payment authorized (signature ready for agent to use)
 	| "confirmed" // Transaction confirmed on-chain
 	| "failed" // Transaction failed
 	| "expired"; // Intent expired without action
@@ -41,6 +42,104 @@ export interface Merchant {
 	verified?: boolean; // True if from x402 Bazaar or curated list
 }
 
+// =============================================================================
+// x402 (V2) - Minimal shared shapes
+// =============================================================================
+
+export interface X402Resource {
+	url: string;
+	description?: string;
+	mimeType?: string;
+}
+
+/**
+ * x402 "accepted" payment requirement for the EVM "exact" scheme (EIP-3009).
+ * These values are typically copied from the server's PAYMENT-REQUIRED header
+ * (decoded) and stored on the intent.
+ */
+export interface X402AcceptedExactEvm {
+	scheme: "exact";
+	/** CAIP-2 network identifier, e.g. "eip155:8453" */
+	network: string;
+	/** Amount in atomic units (e.g. 10000 = 0.01 USDC with 6 decimals) */
+	amount: string;
+	/** ERC-20 token contract address (must support EIP-3009) */
+	asset: string;
+	/** Recipient address */
+	payTo: string;
+	maxTimeoutSeconds?: number;
+	extra?: {
+		/**
+		 * EIP-712 domain name and version for the token (e.g. USDC is usually:
+		 * name: "USD Coin", version: "2").
+		 */
+		name?: string;
+		version?: string;
+		decimals?: number;
+	};
+}
+
+export interface X402ExactEvmAuthorization {
+	from: string;
+	to: string;
+	value: string;
+	validAfter: string;
+	validBefore: string;
+	nonce: string;
+}
+
+export interface X402ExactEvmPayload {
+	signature: string;
+	authorization: X402ExactEvmAuthorization;
+}
+
+export interface X402PaymentPayload {
+	x402Version: 2;
+	resource: X402Resource;
+	accepted: X402AcceptedExactEvm;
+	payload: X402ExactEvmPayload;
+	extensions?: Record<string, unknown>;
+}
+
+/**
+ * Settlement receipt returned by the server in PAYMENT-RESPONSE header.
+ * Contains proof that the payment was successfully processed.
+ */
+export interface X402SettlementReceipt {
+	/** Transaction hash on-chain (if applicable) */
+	txHash?: string;
+	/** Network the settlement occurred on (CAIP-2 format, e.g., "eip155:8453") */
+	network?: string;
+	/** Amount settled in atomic units */
+	amount?: string;
+	/** Timestamp when the settlement was confirmed */
+	settledAt?: string;
+	/** Block number of the settlement transaction */
+	blockNumber?: number;
+	/** Whether the settlement was successful */
+	success: boolean;
+	/** Error message if settlement failed */
+	error?: string;
+	/** Raw PAYMENT-RESPONSE header value (base64-encoded) for debugging */
+	rawHeader?: string;
+}
+
+/**
+ * Stored on an intent when the agent has encountered an x402 paywall.
+ * When signed, `paymentSignatureHeader` is the exact string the agent should send
+ * in the HTTP `PAYMENT-SIGNATURE` header (base64-encoded JSON PaymentPayload).
+ */
+export interface X402Context {
+	resource: X402Resource;
+	accepted: X402AcceptedExactEvm;
+	authorization?: X402ExactEvmAuthorization;
+	signature?: string;
+	paymentPayload?: X402PaymentPayload;
+	paymentSignatureHeader?: string;
+	/** Settlement receipt from PAYMENT-RESPONSE header after agent retries with proof */
+	settlementReceipt?: X402SettlementReceipt;
+}
+
 // Token transfer intent
 export interface TransferIntent {
 	type: "transfer";
@@ -58,6 +157,9 @@ export interface TransferIntent {
 	resource?: string; // x402 resource URL (API endpoint being paid for)
 	merchant?: Merchant; // Merchant/payee information
 	category?: PaymentCategory; // Payment category
+
+	// Full x402 context (optional)
+	x402?: X402Context;
 }
 
 // Base intent structure

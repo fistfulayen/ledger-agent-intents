@@ -1,4 +1,4 @@
-import type { Intent, IntentStatus } from "@agent-intents/shared";
+import type { Intent, IntentStatus, X402PaymentPayload } from "@agent-intents/shared";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Use same-origin API on Vercel; fallback to local backend in development
@@ -64,6 +64,9 @@ interface UpdateIntentStatusParams {
 	status: IntentStatus;
 	txHash?: string;
 	note?: string;
+	// x402: base64-encoded JSON PaymentPayload for PAYMENT-SIGNATURE header
+	paymentSignatureHeader?: string;
+	paymentPayload?: X402PaymentPayload;
 }
 
 /**
@@ -74,11 +77,18 @@ export function useUpdateIntentStatus() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: async ({ id, status, txHash, note }: UpdateIntentStatusParams): Promise<Intent> => {
+		mutationFn: async ({
+			id,
+			status,
+			txHash,
+			note,
+			paymentSignatureHeader,
+			paymentPayload,
+		}: UpdateIntentStatusParams): Promise<Intent> => {
 			const res = await fetch(`${API_BASE}/api/intents/${id}/status`, {
 				method: "PATCH",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ status, txHash, note }),
+				body: JSON.stringify({ status, txHash, note, paymentSignatureHeader, paymentPayload }),
 			});
 
 			if (!res.ok) {

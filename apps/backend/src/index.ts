@@ -11,8 +11,8 @@ import {
 	type CreateIntentRequest,
 	type Intent,
 	type IntentStatus,
-	type TransferIntent,
 	getExplorerTxUrl,
+	type X402PaymentPayload,
 } from "@agent-intents/shared";
 import cors from "cors";
 import express from "express";
@@ -129,10 +129,12 @@ app.patch("/api/intents/:id/status", (req, res) => {
 		return;
 	}
 
-	const { status, txHash, note } = req.body as {
+	const { status, txHash, note, paymentSignatureHeader, paymentPayload } = req.body as {
 		status: IntentStatus;
 		txHash?: string;
 		note?: string;
+		paymentSignatureHeader?: string;
+		paymentPayload?: X402PaymentPayload;
 	};
 
 	const now = new Date().toISOString();
@@ -147,10 +149,35 @@ app.patch("/api/intents/:id/status", (req, res) => {
 		intent.txHash = txHash;
 		// Generate explorer link using shared helper
 		intent.txUrl = getExplorerTxUrl(intent.details.chainId, txHash);
+	} else if (status === "signed") {
+		// Signed may also mean x402 authorization signature (no onchain tx hash)
+		intent.signedAt = now;
 	} else if (status === "confirmed") {
 		intent.confirmedAt = now;
 	} else if (status === "rejected") {
 		intent.reviewedAt = now;
+	}
+
+	// Persist x402 proof data inside the details blob if provided
+	if (paymentSignatureHeader || paymentPayload) {
+		const existing = intent.details.x402;
+		const base =
+			paymentPayload
+				? { resource: paymentPayload.resource, accepted: paymentPayload.accepted }
+				: existing;
+
+		if (base) {
+			intent.details = {
+				...intent.details,
+				x402: {
+					...base,
+					...(existing ?? {}),
+					paymentSignatureHeader:
+						paymentSignatureHeader ?? existing?.paymentSignatureHeader,
+					paymentPayload: paymentPayload ?? existing?.paymentPayload,
+				},
+			};
+		}
 	}
 
 	console.log(`[Intent ${status.toUpperCase()}] ${intent.id}${txHash ? ` tx: ${txHash}` : ""}`);
