@@ -28,6 +28,7 @@ interface LedgerContextType {
 	disconnect: () => void;
 	sendTransaction: (tx: TransactionRequest) => Promise<string>;
 	signTypedDataV4: (typedData: unknown) => Promise<string>;
+	personalSign: (message: string) => Promise<string>;
 	openLedgerModal: () => void;
 }
 
@@ -267,6 +268,26 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 		[provider, account],
 	);
 
+	const personalSign = useCallback(
+		async (message: string): Promise<string> => {
+			if (!provider) throw new Error("No provider available");
+			if (!account) throw new Error("Not connected");
+
+			// Convert the human-readable message to a hex-encoded string for personal_sign
+			const hexMessage = `0x${Array.from(new TextEncoder().encode(message))
+				.map((b) => b.toString(16).padStart(2, "0"))
+				.join("")}`;
+
+			const signature = (await provider.provider.request({
+				method: "personal_sign",
+				params: [hexMessage, account],
+			})) as string;
+
+			return signature;
+		},
+		[provider, account],
+	);
+
 	// Memoize the context value to prevent unnecessary re-renders of consumers
 	const contextValue = useMemo(
 		() => ({
@@ -279,6 +300,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			disconnect,
 			sendTransaction,
 			signTypedDataV4,
+			personalSign,
 			openLedgerModal,
 		}),
 		[
@@ -290,6 +312,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			disconnect,
 			sendTransaction,
 			signTypedDataV4,
+			personalSign,
 			openLedgerModal,
 		],
 	);

@@ -213,7 +213,7 @@ function ProvisionAgentForm(props: {
 	onClose: () => void;
 }) {
 	const { trustchainId, onClose } = props;
-	const { signTypedDataV4, account } = useLedger();
+	const { personalSign } = useLedger();
 
 	const [step, setStep] = useState<ProvisionStep>("label");
 	const [label, setLabel] = useState("");
@@ -235,44 +235,14 @@ function ProvisionAgentForm(props: {
 			// 2. Ask user to authorize on Ledger device (EIP-191 personal_sign)
 			setStep("signing");
 			const agentLabel = label || "Unnamed Agent";
-			const message = buildAuthorizationMessage({
+			const authMessage = buildAuthorizationMessage({
 				agentPublicKey: km.publicKeyHex,
 				agentLabel,
 				trustchainId,
 			});
 
-			// personal_sign via the EIP-1193 provider
-			const provider = (document.querySelector("ledger-button-app") as HTMLElement & {
-				_eip6963Provider?: { provider: { request: (args: { method: string; params: unknown[] }) => Promise<unknown> } };
-			})?._eip6963Provider?.provider;
-
-			let signature: string;
-			if (provider) {
-				// Use the raw provider for personal_sign
-				signature = (await provider.request({
-					method: "personal_sign",
-					params: [
-						`0x${Array.from(new TextEncoder().encode(message))
-							.map((b) => b.toString(16).padStart(2, "0"))
-							.join("")}`,
-						account,
-					],
-				})) as string;
-			} else {
-				// Fallback: use signTypedDataV4 won't work for personal_sign,
-				// so we try the global ethereum provider
-				const eth = (window as unknown as { ethereum?: { request: (args: { method: string; params: unknown[] }) => Promise<unknown> } }).ethereum;
-				if (!eth) throw new Error("No wallet provider available for signing");
-				signature = (await eth.request({
-					method: "personal_sign",
-					params: [
-						`0x${Array.from(new TextEncoder().encode(message))
-							.map((b) => b.toString(16).padStart(2, "0"))
-							.join("")}`,
-						account,
-					],
-				})) as string;
-			}
+			// Use the Ledger provider's personalSign (routes through the Ledger Button, not Rabby)
+			const signature = await personalSign(authMessage);
 
 			// 3. Register on backend with device signature
 			setStep("registering");
@@ -285,11 +255,11 @@ function ProvisionAgentForm(props: {
 
 			setStep("download");
 		} catch (err) {
-			const message = err instanceof Error ? err.message : "Failed to provision agent";
-			setError(message);
+			const errMessage = err instanceof Error ? err.message : "Failed to provision agent";
+			setError(errMessage);
 			setStep("label");
 		}
-	}, [trustchainId, label, registerAgent, account, signTypedDataV4]);
+	}, [trustchainId, label, registerAgent, personalSign]);
 
 	const handleDownload = useCallback(() => {
 		if (!keyMaterial) return;
