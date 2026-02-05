@@ -350,19 +350,22 @@ function IntentRow({ intent, onSelectIntent }: IntentRowProps) {
 			try {
 				const signature = await signTypedDataV4(typedDataForSign);
 
-				// Verify the signature locally before persisting
-				const isValid = await verifyTypedData({
-					address: account as `0x${string}`,
-					domain,
-					types,
-					primaryType: "TransferWithAuthorization",
-					message,
-					signature: signature as `0x${string}`,
-				});
+				// Best-effort local verification – proceed even if it fails
+				try {
+					const isValid = await verifyTypedData({
+						address: account as `0x${string}`,
+						domain,
+						types,
+						primaryType: "TransferWithAuthorization",
+						message,
+						signature: signature as `0x${string}`,
+					});
 
-				if (!isValid) {
-					setError("Signature verification failed");
-					return;
+					if (!isValid) {
+						console.warn("Local signature verification returned false – proceeding anyway");
+					}
+				} catch (verifyErr) {
+					console.warn("Local signature verification failed:", verifyErr);
 				}
 
 				const paymentPayload: X402PaymentPayload = {

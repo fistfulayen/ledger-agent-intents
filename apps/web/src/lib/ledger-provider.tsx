@@ -291,16 +291,69 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 		}
 	}, [provider, syncProviderState]);
 
+	// -----------------------------------------------------------------------
+	// ensureAccount: always ask the SDK for the live account before signing.
+	// 1. eth_accounts (passive, no modal) – returns the current account if one
+	//    is already selected in the Ledger Button.
+	// 2. eth_requestAccounts (interactive) – opens account-selection UI only
+	//    when there is no selected account (e.g. after a page refresh).
+	// This removes the dependency on React state which can be stale after
+	// account changes or page navigation.
+	// -----------------------------------------------------------------------
+	const ensureAccount = useCallback(
+		async (): Promise<string> => {
+			if (!provider) throw new Error("No provider available");
+
+			// Passive check first
+			const passiveRaw = await provider.provider.request({
+				method: "eth_accounts",
+				params: [],
+			});
+			const passive = Array.isArray(passiveRaw)
+				? (passiveRaw as string[])
+				: [];
+
+			if (passive[0]) {
+				if (passive[0] !== account) setAccount(passive[0]);
+				return passive[0];
+			}
+
+			// No account yet – interactive prompt (opens modal if needed)
+			const activeRaw = await provider.provider.request({
+				method: "eth_requestAccounts",
+				params: [],
+			});
+			const active = Array.isArray(activeRaw)
+				? (activeRaw as string[])
+				: [];
+
+			if (!active[0]) throw new Error("No account selected");
+
+			setAccount(active[0]);
+
+			// Also sync chain
+			provider.provider
+				.request({ method: "eth_chainId", params: [] })
+				.then((raw: unknown) => {
+					if (typeof raw === "string")
+						setChainId(Number.parseInt(raw, 16));
+				})
+				.catch(() => {});
+
+			return active[0];
+		},
+		[provider, account],
+	);
+
 	const sendTransaction = useCallback(
 		async (tx: TransactionRequest): Promise<string> => {
-			if (!provider) throw new Error("No provider available");
-			if (!account) throw new Error("Not connected");
+			const currentAccount = await ensureAccount();
 
-			const txHash = (await provider.provider.request({
+			const txHash = (await provider!.provider.request({
 				method: "eth_sendTransaction",
 				params: [
 					{
-						from: account,
+						from: currentAccount,
 						to: tx.to,
 						data: tx.data,
 						value: tx.value || "0x0",
@@ -310,37 +363,35 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 			return txHash;
 		},
-		[provider, account],
+		[provider, ensureAccount],
 	);
 
 	const signTypedDataV4 = useCallback(
 		async (typedData: unknown): Promise<string> => {
-			if (!provider) throw new Error("No provider available");
-			if (!account) throw new Error("Not connected");
+			const currentAccount = await ensureAccount();
 
-			const signature = (await provider.provider.request({
+			const signature = (await provider!.provider.request({
 				method: "eth_signTypedData_v4",
-				params: [account, JSON.stringify(typedData)],
+				params: [currentAccount, JSON.stringify(typedData)],
 			})) as string;
 
 			return signature;
 		},
-		[provider, account],
+		[provider, ensureAccount],
 	);
 
 	const personalSign = useCallback(
 		async (message: string): Promise<string> => {
-			if (!provider) throw new Error("No provider available");
-			if (!account) throw new Error("Not connected");
+			const currentAccount = await ensureAccount();
 
 			// Convert the human-readable message to a hex-encoded string for personal_sign
 			const hexMessage = `0x${Array.from(new TextEncoder().encode(message))
 				.map((b) => b.toString(16).padStart(2, "0"))
 				.join("")}`;
 
-			const signature = (await provider.provider.request({
+			const signature = (await provider!.provider.request({
 				method: "personal_sign",
-				params: [hexMessage, account],
+				params: [hexMessage, currentAccount],
 			})) as string;
 
 			// Dismiss the Ledger Button success modal so it doesn't block the UI.
@@ -361,7 +412,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 			return signature;
 		},
-		[provider, account],
+		[provider, ensureAccount],
 	);
 
 	// Memoize the context value to prevent unnecessary re-renders of consumers
