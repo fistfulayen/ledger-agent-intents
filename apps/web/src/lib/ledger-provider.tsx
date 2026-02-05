@@ -41,24 +41,54 @@ let ledgerAppReady = false;
 
 /**
  * Dismiss the Ledger SDK overlay modal (success, rejection, or error).
- * The SDK's `<ledger-core-modal>` uses a Shadow DOM. We try to click its
- * close button first; if that doesn't work we remove the element entirely
- * so the user is never stuck on a frozen overlay.
+ *
+ * The modal (`<ledger-core-modal>`) can live in the top-level document OR
+ * inside the shadow DOM of another Ledger web-component. We search both
+ * locations, try clicking the close button, and ultimately remove the
+ * element from the DOM so the user is never stuck on a frozen overlay.
+ *
+ * Multiple attempts with staggered delays handle cases where the SDK
+ * creates or re-renders the modal asynchronously.
  */
 function dismissLedgerModal(): void {
-	requestAnimationFrame(() => {
-		const modal = document.querySelector("ledger-core-modal");
-		if (modal?.shadowRoot) {
-			const closeBtn = modal.shadowRoot.querySelector<HTMLElement>(
-				"button, [data-dismiss], .close-button, [aria-label='Close']",
-			);
-			closeBtn?.click();
+	const nuke = () => {
+		// 1. Top-level document
+		for (const modal of document.querySelectorAll("ledger-core-modal")) {
+			tryCloseOrRemove(modal as HTMLElement);
 		}
-		// Fallback: remove the modal element entirely if click didn't work
-		setTimeout(() => {
-			document.querySelector("ledger-core-modal")?.remove();
-		}, 300);
-	});
+
+		// 2. Inside shadow roots of known Ledger custom elements
+		const hosts = document.querySelectorAll(
+			"ledger-button-app, ledger-button-provider, ledger-button",
+		);
+		for (const host of hosts) {
+			if (host.shadowRoot) {
+				for (const modal of host.shadowRoot.querySelectorAll(
+					"ledger-core-modal",
+				)) {
+					tryCloseOrRemove(modal as HTMLElement);
+				}
+			}
+		}
+	};
+
+	// Fire immediately and at staggered intervals to catch async re-renders
+	nuke();
+	setTimeout(nuke, 150);
+	setTimeout(nuke, 400);
+	setTimeout(nuke, 800);
+}
+
+/** Try to click the close button inside a modal's shadow root, then remove it. */
+function tryCloseOrRemove(modal: HTMLElement): void {
+	if (modal.shadowRoot) {
+		const closeBtn = modal.shadowRoot.querySelector<HTMLElement>(
+			"button, [data-dismiss], .close-button, [aria-label='Close']",
+		);
+		closeBtn?.click();
+	}
+	// Always remove – the click may not work if the SDK's handlers are broken
+	modal.remove();
 }
 
 export function LedgerProvider({ children }: { children: ReactNode }) {
