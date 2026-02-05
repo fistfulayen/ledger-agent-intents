@@ -42,5 +42,6 @@ coverage/
 # Vite generated files
 **/*.timestamp_*.js
 
-# Cloned repos (for reference only)
-ledger-button/
+# Ledger button packages dist (built locally)
+packages/ledger-button/dist/
+packages/ledger-button-core/dist/
