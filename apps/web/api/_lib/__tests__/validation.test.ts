@@ -263,12 +263,28 @@ describe("challengeBodySchema", () => {
 
 describe("verifyBodySchema", () => {
 	it("accepts valid verify body", () => {
-		const result = verifyBodySchema.safeParse({ challengeId: "c-123", signature: "0xsig" });
+		const result = verifyBodySchema.safeParse({
+			walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+			nonce: "abc123",
+			signature: "0xsig",
+		});
 		expect(result.success).toBe(true);
 	});
 
-	it("rejects empty challengeId", () => {
-		const result = verifyBodySchema.safeParse({ challengeId: "", signature: "0xsig" });
+	it("rejects empty walletAddress", () => {
+		const result = verifyBodySchema.safeParse({
+			walletAddress: "",
+			nonce: "abc123",
+			signature: "0xsig",
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects missing nonce", () => {
+		const result = verifyBodySchema.safeParse({
+			walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+			signature: "0xsig",
+		});
 		expect(result.success).toBe(false);
 	});
 });
