@@ -708,8 +708,24 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 						// Timed out waiting for unlock — fall through and let getAddress handle it
 					}
 
-					// Device unlocked (or timed out) — clear the unlock UI
-					// and re-open the connect dialog so the deriving loader shows
+					// Device unlocked — wait for the session to fully
+					// re-synchronise with the device. Without this the DMK
+					// may not yet know which app is running, causing the
+					// subsequent getAddress(skipOpenApp) probe to fail and
+					// unnecessarily closing / reopening the Ethereum app.
+					try {
+						await firstValueFrom(
+							dmk.getDeviceSessionState({ sessionId }).pipe(
+								filter((s) => s.sessionStateType !== DeviceSessionStateType.Connected),
+								timeout(5_000),
+							),
+						);
+					} catch {
+						// Timeout — proceed anyway
+					}
+
+					// Clear the unlock UI and re-open the connect dialog
+					// so the deriving loader shows
 					setDeviceActionState(null);
 					setShowConnectDialog(true);
 				}
