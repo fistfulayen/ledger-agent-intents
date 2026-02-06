@@ -491,22 +491,20 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 	}, []);
 
 	// -----------------------------------------------------------------------
-	// Open Ethereum app + derive addresses (reusable helper)
+	// Ensure the Ethereum app is open (shared by connect + reconnect flows)
+	// Returns true if the app was already open (via skipOpenApp probe).
 	// -----------------------------------------------------------------------
-	const openAppAndDeriveAddresses = useCallback(async () => {
+	const ensureEthereumApp = useCallback(async (): Promise<boolean> => {
 		const sessionId = sessionIdRef.current;
 		if (!sessionId) {
 			throw new Error("No device connected.");
 		}
 		const dmk = getDmk();
 		const ethSigner = buildEthSigner(dmk, sessionId);
-		const addresses: DerivedAddress[] = [];
 
-		// Try deriving the first address silently (skipOpenApp = true).
-		// If the Ethereum app is open this succeeds immediately.
-		let ethAppReady = false;
+		// Try deriving an address silently — if it succeeds, the
+		// Ethereum app is already running and we can skip the open flow.
 		const firstPath = DERIVATION_PATHS[0];
-
 		if (firstPath) {
 			try {
 				const { observable } = ethSigner.getAddress(firstPath, {
@@ -515,41 +513,48 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				});
 				const result = await lastValueFrom(observable);
 				if (result.status === DeviceActionStatus.Completed) {
-					addresses.push({
-						address: result.output.address,
-						derivationPath: firstPath,
-					});
-					ethAppReady = true;
+					return true; // app already open
 				}
 			} catch {
 				// Ethereum app is not open — we'll open it below
 			}
 		}
 
-		if (!ethAppReady) {
-			const openAppAction = new OpenAppWithDependenciesDeviceAction({
-				input: {
-					application: { name: "Ethereum" },
-					dependencies: [],
-				},
-			});
+		const openAppAction = new OpenAppWithDependenciesDeviceAction({
+			input: {
+				application: { name: "Ethereum" },
+				dependencies: [],
+			},
+		});
 
-			const { observable: openAppObservable } = dmk.executeDeviceAction({
-				sessionId,
-				deviceAction: openAppAction,
-			});
+		const { observable: openAppObservable } = dmk.executeDeviceAction({
+			sessionId,
+			deviceAction: openAppAction,
+		});
 
-			await observeDeviceAction(openAppObservable, "Ethereum app setup");
-		}
+		await observeDeviceAction(openAppObservable, "Ethereum app setup");
+		return false; // app was not open, we opened it
+	}, []);
 
-		// Ethereum app is open — derive addresses
+	// -----------------------------------------------------------------------
+	// Open Ethereum app + derive addresses + show picker (fresh connect)
+	// -----------------------------------------------------------------------
+	const openAppAndDeriveAddresses = useCallback(async () => {
+		const appWasOpen = await ensureEthereumApp();
+
+		const sessionId = sessionIdRef.current!;
+		const dmk = getDmk();
+		const ethSigner = buildEthSigner(dmk, sessionId);
+		const addresses: DerivedAddress[] = [];
+
+		// Transition to "deriving addresses" view
 		setConnectingTransport(null);
 		setDeviceActionState(null);
 		setIsDerivingAddresses(true);
 
-		const remainingPaths = ethAppReady ? DERIVATION_PATHS.slice(1) : DERIVATION_PATHS;
-
-		for (const derivPath of remainingPaths) {
+		// If the app was already open, we already probed the first path
+		// in ensureEthereumApp — re-derive it here to populate the list.
+		for (const derivPath of DERIVATION_PATHS) {
 			if (!derivPath) continue;
 			try {
 				const { observable } = ethSigner.getAddress(derivPath, {
@@ -573,7 +578,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 		setShowConnectDialog(false);
 		setDerivedAddresses(addresses);
 		setShowAddressPicker(true);
-	}, []);
+	}, [ensureEthereumApp]);
 
 	// -----------------------------------------------------------------------
 	// Retry opening the Ethereum app on the already-connected device
@@ -730,8 +735,19 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					setShowConnectDialog(true);
 				}
 
-				// Open the Ethereum app (if needed) and derive addresses
-				await openAppAndDeriveAddresses();
+				// If we already have a persisted account (e.g. reconnecting
+				// after a page refresh), just ensure the Ethereum app is open
+				// and skip the address picker — go straight to ready state.
+				if (account) {
+					await ensureEthereumApp();
+					setConnectingTransport(null);
+					setDeviceActionState(null);
+					setIsDerivingAddresses(false);
+					setShowConnectDialog(false);
+				} else {
+					// Fresh connect — derive addresses and show the picker
+					await openAppAndDeriveAddresses();
+				}
 
 				// Start monitoring the session for disconnects
 				monitorSession(sessionId);
@@ -769,7 +785,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				}
 			}
 		},
-		[monitorSession, openAppAndDeriveAddresses],
+		[monitorSession, openAppAndDeriveAddresses, ensureEthereumApp, account],
 	);
 
 	// -----------------------------------------------------------------------
