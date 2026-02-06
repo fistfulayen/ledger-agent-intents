@@ -206,8 +206,8 @@ function DocsPage() {
 				{/* Overview */}
 				<Section id="overview" title="Overview">
 					<p className="body-1 text-base">
-						The Agent Payments with Ledger API allows AI agents to submit transaction intents that will
-						be queued for human review and hardware signing. This creates a secure bridge where
+						The Agent Payments with Ledger API allows AI agents to submit transaction intents that
+						will be queued for human review and hardware signing. This creates a secure bridge where
 						agents can propose transactions but never access private keys.
 					</p>
 					<div className="grid grid-cols-1 md:grid-cols-3 gap-16">
@@ -1337,7 +1337,9 @@ done`}
 				<div className="pt-32 border-t border-[#30363d]">
 					<div className="flex items-center justify-between">
 						<div>
-							<p className="body-2 text-muted-subtle">Agent Payments with Ledger API Documentation</p>
+							<p className="body-2 text-muted-subtle">
+								Agent Payments with Ledger API Documentation
+							</p>
 							<p className="body-3 text-muted-subtle mt-4">
 								Machine-readable spec:{" "}
 								<a href="/openapi.json" className="text-accent hover:underline">

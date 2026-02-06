@@ -144,30 +144,10 @@ function AgentContextIcon({ className }: { className?: string }) {
 			/>
 			<circle cx="7.5" cy="8" r="1" fill="currentColor" />
 			<circle cx="12.5" cy="8" r="1" fill="currentColor" />
-			<path
-				d="M10 13V15"
-				stroke="currentColor"
-				strokeWidth="1.5"
-				strokeLinecap="round"
-			/>
-			<path
-				d="M6 17H14"
-				stroke="currentColor"
-				strokeWidth="1.5"
-				strokeLinecap="round"
-			/>
-			<path
-				d="M10 3V1.5"
-				stroke="currentColor"
-				strokeWidth="1.5"
-				strokeLinecap="round"
-			/>
-			<path
-				d="M7 1.5H13"
-				stroke="currentColor"
-				strokeWidth="1.5"
-				strokeLinecap="round"
-			/>
+			<path d="M10 13V15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M6 17H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M10 3V1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+			<path d="M7 1.5H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
 		</svg>
 	);
 }
@@ -215,7 +195,12 @@ type NavItem = {
 const mainNavItems: NavItem[] = [
 	{ id: "home", label: "Review Intents", icon: HomeIcon, path: "/" },
 	{ id: "history", label: "Transaction History", icon: HistoryIcon, path: "/history" },
-	{ id: "agent-context", label: "Context for Agents", icon: AgentContextIcon, path: "/agent-context" },
+	{
+		id: "agent-context",
+		label: "Context for Agents",
+		icon: AgentContextIcon,
+		path: "/agent-context",
+	},
 ];
 
 const bottomNavItems: NavItem[] = [

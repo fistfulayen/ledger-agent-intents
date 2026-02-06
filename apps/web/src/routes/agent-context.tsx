@@ -8,7 +8,8 @@ export const Route = createFileRoute("/agent-context")({
 			{ title: "Context for Agents | Agent Payments with Ledger" },
 			{
 				name: "description",
-				content: "Quickstart guide for AI agents to create payment intents using a JSON credential file.",
+				content:
+					"Quickstart guide for AI agents to create payment intents using a JSON credential file.",
 			},
 		],
 	}),
@@ -109,8 +110,8 @@ function AgentContextPage() {
 				{/* 1. Credential File */}
 				<Section id="credential-file" title="1. Credential File">
 					<p className="body-2 text-muted">
-						You need a JSON credential file with this shape. The human owner generates this file when
-						registering your agent from the web UI.
+						You need a JSON credential file with this shape. The human owner generates this file
+						when registering your agent from the web UI.
 					</p>
 					<CodeBlock language="json" title="agent-credential.json">
 						{`{
@@ -127,9 +128,9 @@ function AgentContextPage() {
 							<strong>Security:</strong> Never commit this file to version control. Add it to{" "}
 							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">.gitignore</code> and
 							restrict file permissions (
-							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">chmod 600</code>). The{" "}
-							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">privateKey</code> field is
-							a secret — treat it like a password.
+							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">chmod 600</code>).
+							The <code className="px-4 py-2 rounded-xs bg-muted text-base body-3">privateKey</code>{" "}
+							field is a secret — treat it like a password.
 						</p>
 					</div>
 				</Section>
@@ -138,7 +139,8 @@ function AgentContextPage() {
 				<Section id="agentauth-header" title="2. Build the AgentAuth Header">
 					<p className="body-2 text-muted">
 						Every request to the API requires an{" "}
-						<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">Authorization</code> header:
+						<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">Authorization</code>{" "}
+						header:
 					</p>
 					<CodeBlock language="text" title="Header format">
 						{"Authorization: AgentAuth <timestamp>.<bodyHash>.<signature>"}
@@ -157,7 +159,9 @@ function AgentContextPage() {
 							<tbody className="body-2 text-muted">
 								<tr className="border-b border-muted/50">
 									<td className="py-8 pr-16">
-										<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">timestamp</code>
+										<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">
+											timestamp
+										</code>
 									</td>
 									<td className="py-8">
 										Current Unix epoch in <strong>seconds</strong> as a string (must be within 5 min
@@ -180,7 +184,9 @@ function AgentContextPage() {
 								</tr>
 								<tr className="border-b border-muted/50">
 									<td className="py-8 pr-16">
-										<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">signature</code>
+										<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">
+											signature
+										</code>
 									</td>
 									<td className="py-8">
 										<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">
@@ -206,8 +212,8 @@ function AgentContextPage() {
 							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">bodyHash</code>,{" "}
 							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">signature</code>){" "}
 							<strong>must</strong> include the{" "}
-							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">0x</code> prefix. Omitting
-							it will result in a{" "}
+							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">0x</code> prefix.
+							Omitting it will result in a{" "}
 							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">
 								401 Authentication failed
 							</code>{" "}
@@ -217,10 +223,10 @@ function AgentContextPage() {
 
 					<h3 className="heading-5-semi-bold text-base mt-24">Body hashing</h3>
 					<p className="body-2 text-muted">
-						The{" "}
-						<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">bodyHash</code> is computed
-						over the <strong>exact bytes</strong> sent in the request body. Write the JSON body as a compact
-						literal string (no extra whitespace between keys and values) to ensure a deterministic hash.
+						The <code className="px-4 py-2 rounded-xs bg-muted text-base body-3">bodyHash</code> is
+						computed over the <strong>exact bytes</strong> sent in the request body. Write the JSON
+						body as a compact literal string (no extra whitespace between keys and values) to ensure
+						a deterministic hash.
 					</p>
 				</Section>
 
@@ -266,8 +272,8 @@ function AgentContextPage() {
 
 					<p className="body-2 text-muted">
 						Share the{" "}
-						<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">paymentUrl</code> with the
-						human so they can review and sign the transaction.
+						<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">paymentUrl</code> with
+						the human so they can review and sign the transaction.
 					</p>
 				</Section>
 
@@ -282,8 +288,8 @@ function AgentContextPage() {
 					</p>
 					<p className="body-2 text-muted">
 						Poll until{" "}
-						<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">status</code> is one of the
-						terminal states:{" "}
+						<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">status</code> is one of
+						the terminal states:{" "}
 						<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">confirmed</code>,{" "}
 						<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">rejected</code>,{" "}
 						<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">failed</code>, or{" "}
@@ -358,11 +364,13 @@ echo "Final status: $STATUS"`}
 					<div className="p-16 rounded-md bg-accent/10">
 						<p className="body-2 text-base">
 							<strong>Tip:</strong>{" "}
-							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">cast keccak</code> and{" "}
-							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">cast wallet sign</code>{" "}
-							both return{" "}
-							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">0x</code>-prefixed output —
-							no manual hex formatting needed.
+							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">cast keccak</code>{" "}
+							and{" "}
+							<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">
+								cast wallet sign
+							</code>{" "}
+							both return <code className="px-4 py-2 rounded-xs bg-muted text-base body-3">0x</code>
+							-prefixed output — no manual hex formatting needed.
 						</p>
 					</div>
 				</Section>
@@ -434,9 +442,10 @@ echo "Final status: $STATUS"`}
 										Ensure{" "}
 										<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">bodyHash</code>{" "}
 										and{" "}
-										<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">signature</code>{" "}
-										are{" "}
-										<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">0x</code>
+										<code className="px-4 py-2 rounded-xs bg-muted text-base body-3">
+											signature
+										</code>{" "}
+										are <code className="px-4 py-2 rounded-xs bg-muted text-base body-3">0x</code>
 										-prefixed hex strings
 									</td>
 								</tr>
@@ -472,7 +481,9 @@ echo "Final status: $STATUS"`}
 				<div className="pt-32 border-t border-[#30363d]">
 					<div className="flex items-center justify-between">
 						<div>
-							<p className="body-2 text-muted-subtle">Agent Payments with Ledger — Context for Agents</p>
+							<p className="body-2 text-muted-subtle">
+								Agent Payments with Ledger — Context for Agents
+							</p>
 							<p className="body-3 text-muted-subtle mt-4">
 								Full API reference:{" "}
 								<Link to="/docs" className="text-accent hover:underline">
