@@ -29,7 +29,6 @@ import {
 	useState,
 } from "react";
 import { firstValueFrom } from "rxjs";
-import { filter } from "rxjs/operators";
 import {
 	http,
 	type Chain,
@@ -346,34 +345,21 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				}
 
 				// Close the connect dialog — from here, DeviceActionDialog
-				// takes over if device interaction is needed
+				// takes over for device interactions (unlock, open app, etc.)
 				setShowConnectDialog(false);
 				setConnectingTransport(null);
 
-				// Derive address
+				// Derive address — use observeDeviceAction so that device
+				// interactions (unlock, open Ethereum app, etc.) are displayed
 				const ethSigner = buildEthSigner(dmk, sessionId);
 
 				const { observable: addressObservable } = ethSigner.getAddress(derivationPathRef.current, {
 					checkOnDevice: false,
+					skipOpenApp: false,
 				});
 
-				const addressState = await firstValueFrom(
-					addressObservable.pipe(
-						filter(
-							(state) =>
-								state.status === DeviceActionStatus.Completed ||
-								state.status === DeviceActionStatus.Error,
-						),
-					),
-				);
-
-				if (addressState.status === DeviceActionStatus.Error) {
-					throw addressState.error ?? new Error("Failed to derive address");
-				}
-
-				if (addressState.status === DeviceActionStatus.Completed) {
-					setAccount(addressState.output.address);
-				}
+				const addressResult = await observeDeviceAction(addressObservable, "Address derivation");
+				setAccount(addressResult.address);
 
 				// Start monitoring the session for disconnects
 				monitorSession(sessionId);

@@ -12,7 +12,7 @@ import { useMemo } from "react";
 import { type AnimationKey, type DeviceModel, getDeviceAnimation } from "./animations";
 
 // =============================================================================
-// Fallback icons (used when no lottie is available)
+// Icons
 // =============================================================================
 
 function CheckIcon({ className }: { className?: string }) {
@@ -57,6 +57,39 @@ function AlertIcon({ className }: { className?: string }) {
 	);
 }
 
+function LedgerLogoIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
+			role="img"
+			aria-label="Ledger"
+		>
+			<path
+				d="M3 14.4V21h6.6v-1.2H4.2v-5.4H3ZM14.4 3H21v6.6h-1.2V4.2h-5.4V3ZM3 3h6.6v1.2H4.2v5.4H3V3Zm11.4 16.8V21H21v-6.6h-1.2v5.4h-5.4Z"
+				fill="currentColor"
+			/>
+		</svg>
+	);
+}
+
+function UsbIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="currentColor"
+			xmlns="http://www.w3.org/2000/svg"
+			role="img"
+			aria-label="USB"
+		>
+			<path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07A1.993 1.993 0 0 0 8 7a2 2 0 0 0-4 0c0 .74.4 1.39 1 1.73V13a2 2 0 0 0 2 2h3v2.27c-.6.34-1 .99-1 1.73a2 2 0 0 0 4 0c0-.74-.4-1.39-1-1.73V15h3a2 2 0 0 0 2-2v-2h1V7h-3Z" />
+		</svg>
+	);
+}
+
 // =============================================================================
 // Map UI state → animation key
 // =============================================================================
@@ -66,8 +99,6 @@ function getAnimationKey(status: DeviceActionUiState["status"]): AnimationKey | 
 		case "unlock-device":
 			return "pin";
 		case "allow-secure-connection":
-		case "open-app":
-		case "confirm-open-app":
 		case "verify-address":
 			return "continueOnLedger";
 		case "sign-transaction":
@@ -86,6 +117,8 @@ function getAnimationKey(status: DeviceActionUiState["status"]): AnimationKey | 
 type StatusConfig = {
 	title: string;
 	subtitle: string | null;
+	/** Show the USB icon instead of a Lottie animation. */
+	useUsbIcon?: boolean;
 };
 
 function getStatusConfig(status: DeviceActionUiState["status"]): StatusConfig {
@@ -103,8 +136,9 @@ function getStatusConfig(status: DeviceActionUiState["status"]): StatusConfig {
 		case "open-app":
 		case "confirm-open-app":
 			return {
-				title: "Continue on your Ledger",
+				title: "Open Ethereum app",
 				subtitle: "Follow the instructions displayed on your Secure Touchscreen.",
+				useUsbIcon: true,
 			};
 		case "sign-transaction":
 			return {
@@ -140,10 +174,8 @@ function getStatusConfig(status: DeviceActionUiState["status"]): StatusConfig {
 export function DeviceActionDialog() {
 	const { deviceActionState, deviceModelId, dismissDeviceAction } = useLedger();
 
-	// Resolve the device model for animation lookup
 	const deviceModel: DeviceModel = (deviceModelId as DeviceModel) ?? "generic";
 
-	// Get the lottie animation data for the current state
 	const animationData = useMemo(() => {
 		if (!deviceActionState) return null;
 		const key = getAnimationKey(deviceActionState.status);
@@ -156,7 +188,44 @@ export function DeviceActionDialog() {
 	const config = getStatusConfig(deviceActionState.status);
 	const isError = deviceActionState.status === "error";
 	const isSuccess = deviceActionState.status === "success";
+	const isOpenApp =
+		deviceActionState.status === "open-app" || deviceActionState.status === "confirm-open-app";
 
+	// -------------------------------------------------------------------------
+	// "Open Ethereum app" layout — matches the Ledger reference design
+	// -------------------------------------------------------------------------
+	if (isOpenApp) {
+		return (
+			<Dialog
+				open
+				onOpenChange={() => {
+					/* managed programmatically */
+				}}
+			>
+				<DialogContent>
+					{/* Minimal header with just the Ledger logo */}
+					<div className="p-16">
+						<LedgerLogoIcon className="size-24 text-base" />
+					</div>
+					<DialogBody>
+						<div className="flex flex-col items-center gap-16 py-24">
+							<div className="flex size-64 items-center justify-center rounded-full bg-base">
+								<div className="flex size-40 items-center justify-center rounded-full bg-canvas">
+									<UsbIcon className="size-20 text-base" />
+								</div>
+							</div>
+							<p className="heading-4 text-center text-base">{config.title}</p>
+							<p className="body-2 text-muted text-center">{config.subtitle}</p>
+						</div>
+					</DialogBody>
+				</DialogContent>
+			</Dialog>
+		);
+	}
+
+	// -------------------------------------------------------------------------
+	// Standard device-action layout (Lottie + title + subtitle)
+	// -------------------------------------------------------------------------
 	return (
 		<Dialog
 			open={!!deviceActionState}
@@ -191,13 +260,12 @@ export function DeviceActionDialog() {
 								<AlertIcon className="size-32 text-error" />
 							</div>
 						) : (
-							/* Connecting spinner */
 							<div className="flex items-center justify-center size-64">
 								<div className="size-40 border-4 border-muted border-t-interactive rounded-full animate-spin" />
 							</div>
 						)}
 
-						{/* Title text (below animation for device-interaction states) */}
+						{/* Title below animation for device-interaction states */}
 						{config.subtitle && <p className="heading-5 text-center text-base">{config.title}</p>}
 
 						{/* Subtitle / instructions */}
