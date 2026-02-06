@@ -53,7 +53,6 @@ interface TransactionRequest {
 
 export type DeviceActionUiState = {
 	status:
-		| "connecting"
 		| "unlock-device"
 		| "allow-secure-connection"
 		| "open-app"
@@ -87,6 +86,8 @@ interface LedgerContextType {
 	deviceModelId: DeviceModelId | null;
 	/** Dismiss the current device action state (e.g. close an error dialog). */
 	dismissDeviceAction: () => void;
+	/** The transport currently being used to connect, if any. */
+	connectingTransport: TransportType | null;
 }
 
 const LedgerContext = createContext<LedgerContextType | null>(null);
@@ -251,6 +252,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 	const [deviceActionState, setDeviceActionState] = useState<DeviceActionUiState | null>(null);
 	const [showConnectDialog, setShowConnectDialog] = useState(false);
 	const [deviceModelId, setDeviceModelId] = useState<DeviceModelId | null>(null);
+	const [connectingTransport, setConnectingTransport] = useState<TransportType | null>(null);
 
 	const sessionIdRef = useRef<DeviceSessionId | null>(null);
 	const derivationPathRef = useRef<string>(DEFAULT_DERIVATION_PATH);
@@ -300,16 +302,12 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 	// -----------------------------------------------------------------------
 	const connect = useCallback(
 		async (transport: TransportType = "usb") => {
-			// Close the connect dialog immediately so it doesn't overlap
-			// with the DeviceActionDialog
-			setShowConnectDialog(false);
+			// Keep the ConnectDeviceDialog open — it shows a "waiting for device"
+			// screen while the browser's native device picker is displayed.
 			setIsConnecting(true);
+			setConnectingTransport(transport);
 			setError(null);
-			setDeviceActionState({
-				status: "connecting",
-				message:
-					transport === "ble" ? "Searching for Bluetooth devices…" : "Searching for USB devices…",
-			});
+			setDeviceActionState(null);
 
 			try {
 				const dmk = getDmk();
@@ -323,18 +321,13 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 				const transportIdentifier = transport === "usb" ? webHidIdentifier : webBleIdentifier;
 
-				// Start discovery and grab the first device
+				// Start discovery — browser shows the native device picker here
 				const device: DiscoveredDevice = await firstValueFrom(
 					dmk.startDiscovering({ transport: transportIdentifier }),
 				);
 				await dmk.stopDiscovering();
 
 				// Connect to device
-				setDeviceActionState({
-					status: "connecting",
-					message: "Connecting to your Ledger…",
-				});
-
 				const sessionId = await dmk.connect({
 					device,
 					sessionRefresherOptions: { isRefresherDisabled: true },
@@ -352,7 +345,12 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					// Non-fatal: animations will fall back to generic
 				}
 
-				// Derive address — keep spinner on "Connecting" (no separate state)
+				// Close the connect dialog — from here, DeviceActionDialog
+				// takes over if device interaction is needed
+				setShowConnectDialog(false);
+				setConnectingTransport(null);
+
+				// Derive address
 				const ethSigner = buildEthSigner(dmk, sessionId);
 
 				const { observable: addressObservable } = ethSigner.getAddress(derivationPathRef.current, {
@@ -389,6 +387,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				const message = humanizeError(err);
 				const errorObj = new Error(message);
 				setError(errorObj);
+				setConnectingTransport(null);
 				setDeviceActionState({
 					status: "error",
 					message,
@@ -425,6 +424,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 		setDeviceModelId(null);
 		setError(null);
 		setDeviceActionState(null);
+		setConnectingTransport(null);
 	}, []);
 
 	// -----------------------------------------------------------------------
@@ -774,6 +774,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			showConnectDialog,
 			deviceModelId,
 			dismissDeviceAction,
+			connectingTransport,
 		}),
 		[
 			account,
@@ -790,6 +791,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			showConnectDialog,
 			deviceModelId,
 			dismissDeviceAction,
+			connectingTransport,
 		],
 	);
 

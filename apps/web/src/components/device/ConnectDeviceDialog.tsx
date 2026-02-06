@@ -70,8 +70,149 @@ function ChevronRightIcon({ className }: { className?: string }) {
 	);
 }
 
+function CloseIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			className={className}
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			role="img"
+			aria-label="Close"
+		>
+			<path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+		</svg>
+	);
+}
+
 // =============================================================================
-// Component
+// Sub-views
+// =============================================================================
+
+/** Custom header with Ledger icon + close button */
+function CustomHeader({ title, onClose }: { title: string; onClose: () => void }) {
+	return (
+		<div className="flex items-center justify-between p-16">
+			<div className="flex items-center gap-12">
+				<LedgerLogoIcon className="size-24 text-base" />
+				<span className="heading-5 text-base">{title}</span>
+			</div>
+			<button
+				type="button"
+				onClick={onClose}
+				className="flex size-32 items-center justify-center rounded-full hover:bg-muted-transparent transition-colors"
+				aria-label="Close"
+			>
+				<CloseIcon className="size-20 text-muted" />
+			</button>
+		</div>
+	);
+}
+
+/** "Select transport" view — USB / Bluetooth cards */
+function TransportSelector({
+	onSelectUsb,
+	onSelectBle,
+}: { onSelectUsb: () => void; onSelectBle: () => void }) {
+	return (
+		<div className="flex flex-col gap-12">
+			<button
+				type="button"
+				onClick={onSelectUsb}
+				className="flex items-center gap-16 rounded-lg bg-surface hover:bg-surface-hover p-16 transition-colors"
+			>
+				<div className="flex size-40 items-center justify-center rounded-full bg-base">
+					<UsbIcon className="size-20 text-base" />
+				</div>
+				<div className="flex flex-col items-start gap-2 flex-1">
+					<span className="body-1-semi-bold text-base">Connect with USB</span>
+					<span className="body-2 text-muted">Plug in and unlock your device</span>
+				</div>
+				<ChevronRightIcon className="size-20 text-muted" />
+			</button>
+
+			<button
+				type="button"
+				onClick={onSelectBle}
+				className="flex items-center gap-16 rounded-lg bg-surface hover:bg-surface-hover p-16 transition-colors"
+			>
+				<div className="flex size-40 items-center justify-center rounded-full bg-base">
+					<BluetoothIcon className="size-20 text-interactive" />
+				</div>
+				<div className="flex flex-col items-start gap-2 flex-1">
+					<span className="body-1-semi-bold text-base">Connect with bluetooth</span>
+					<span className="body-2 text-muted">Power on and unlock your device</span>
+				</div>
+				<ChevronRightIcon className="size-20 text-muted" />
+			</button>
+		</div>
+	);
+}
+
+/** "Waiting for device" view shown while the browser device picker is open */
+function WaitingForDevice({ isUsb }: { isUsb: boolean }) {
+	return (
+		<div className="flex flex-col items-center gap-16 py-32">
+			<div className="flex size-64 items-center justify-center rounded-full bg-base">
+				{isUsb ? (
+					<UsbIcon className="size-24 text-base" />
+				) : (
+					<BluetoothIcon className="size-24 text-interactive" />
+				)}
+			</div>
+			<p className="heading-4 text-center text-base">Connect your Ledger signer</p>
+			<p className="body-2 text-muted text-center">
+				{isUsb
+					? "Make sure you connect\nyour Ledger signer via USB."
+					: "Make sure your Ledger signer\nhas Bluetooth enabled."}
+			</p>
+		</div>
+	);
+}
+
+/** "Connected" view */
+function ConnectedView({
+	account,
+	onDisconnect,
+}: { account: string | null; onDisconnect: () => void }) {
+	return (
+		<div className="flex flex-col gap-16 py-16">
+			<div className="flex items-center gap-12 rounded-md bg-surface p-16">
+				<div className="flex size-40 items-center justify-center rounded-full bg-success/10">
+					<svg
+						className="size-24 text-success"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="2"
+						role="img"
+						aria-label="Connected"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</svg>
+				</div>
+				<div className="flex flex-col gap-2">
+					<span className="body-2-semi-bold text-base">Ledger Connected</span>
+					<span className="body-3 text-muted font-mono">
+						{account?.slice(0, 6)}...{account?.slice(-4)}
+					</span>
+				</div>
+			</div>
+
+			<Button appearance="transparent" size="md" onClick={onDisconnect}>
+				Disconnect
+			</Button>
+		</div>
+	);
+}
+
+// =============================================================================
+// Main component
 // =============================================================================
 
 export function ConnectDeviceDialog() {
@@ -81,8 +222,10 @@ export function ConnectDeviceDialog() {
 		connect,
 		disconnect,
 		isConnected,
+		isConnecting,
 		account,
 		dismissDeviceAction,
+		connectingTransport,
 	} = useLedger();
 
 	const handleClose = () => {
@@ -97,107 +240,24 @@ export function ConnectDeviceDialog() {
 					<>
 						<DialogHeader appearance="compact" title="Connected Device" onClose={handleClose} />
 						<DialogBody>
-							<div className="flex flex-col gap-16 py-16">
-								<div className="flex items-center gap-12 rounded-md bg-surface p-16">
-									<div className="flex size-40 items-center justify-center rounded-full bg-success/10">
-										<svg
-											className="size-24 text-success"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											strokeWidth="2"
-											role="img"
-											aria-label="Connected"
-										>
-											<path
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-											/>
-										</svg>
-									</div>
-									<div className="flex flex-col gap-2">
-										<span className="body-2-semi-bold text-base">Ledger Connected</span>
-										<span className="body-3 text-muted font-mono">
-											{account?.slice(0, 6)}...{account?.slice(-4)}
-										</span>
-									</div>
-								</div>
-
-								<Button
-									appearance="transparent"
-									size="md"
-									onClick={() => {
-										disconnect();
-									}}
-								>
-									Disconnect
-								</Button>
-							</div>
+							<ConnectedView account={account} onDisconnect={disconnect} />
+						</DialogBody>
+					</>
+				) : isConnecting && connectingTransport ? (
+					<>
+						<CustomHeader title="Connect a Ledger signer" onClose={handleClose} />
+						<DialogBody>
+							<WaitingForDevice isUsb={connectingTransport === "usb"} />
 						</DialogBody>
 					</>
 				) : (
 					<>
-						{/* Header with Ledger icon */}
-						<div className="flex items-center justify-between p-16">
-							<div className="flex items-center gap-12">
-								<LedgerLogoIcon className="size-24 text-base" />
-								<span className="heading-5 text-base">Connect a Ledger signer</span>
-							</div>
-							<button
-								type="button"
-								onClick={handleClose}
-								className="flex size-32 items-center justify-center rounded-full hover:bg-muted-transparent transition-colors"
-								aria-label="Close"
-							>
-								<svg
-									className="size-20 text-muted"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									strokeWidth="2"
-									role="img"
-									aria-label="Close"
-								>
-									<path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-								</svg>
-							</button>
-						</div>
-
+						<CustomHeader title="Connect a Ledger signer" onClose={handleClose} />
 						<DialogBody>
-							<div className="flex flex-col gap-12">
-								{/* USB option */}
-								<button
-									type="button"
-									onClick={() => connect("usb")}
-									className="flex items-center gap-16 rounded-lg bg-surface hover:bg-surface-hover p-16 transition-colors"
-								>
-									<div className="flex size-40 items-center justify-center rounded-full bg-base">
-										<UsbIcon className="size-20 text-base" />
-									</div>
-									<div className="flex flex-col items-start gap-2 flex-1">
-										<span className="body-1-semi-bold text-base">Connect with USB</span>
-										<span className="body-2 text-muted">Plug in and unlock your device</span>
-									</div>
-									<ChevronRightIcon className="size-20 text-muted" />
-								</button>
-
-								{/* Bluetooth option */}
-								<button
-									type="button"
-									onClick={() => connect("ble")}
-									className="flex items-center gap-16 rounded-lg bg-surface hover:bg-surface-hover p-16 transition-colors"
-								>
-									<div className="flex size-40 items-center justify-center rounded-full bg-base">
-										<BluetoothIcon className="size-20 text-interactive" />
-									</div>
-									<div className="flex flex-col items-start gap-2 flex-1">
-										<span className="body-1-semi-bold text-base">Connect with bluetooth</span>
-										<span className="body-2 text-muted">Power on and unlock your device</span>
-									</div>
-									<ChevronRightIcon className="size-20 text-muted" />
-								</button>
-							</div>
+							<TransportSelector
+								onSelectUsb={() => connect("usb")}
+								onSelectBle={() => connect("ble")}
+							/>
 						</DialogBody>
 					</>
 				)}

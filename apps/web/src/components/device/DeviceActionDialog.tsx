@@ -90,8 +90,6 @@ type StatusConfig = {
 
 function getStatusConfig(status: DeviceActionUiState["status"]): StatusConfig {
 	switch (status) {
-		case "connecting":
-			return { title: "Connecting", subtitle: null };
 		case "unlock-device":
 			return {
 				title: "Unlock your Ledger",
