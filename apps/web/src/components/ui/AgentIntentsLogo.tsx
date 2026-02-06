@@ -1,9 +1,9 @@
 /**
- * Agent Intents logo — shield + chevron-right.
+ * Agent Intents logo — robot/agent inside a coin circle.
  * Uses `currentColor` so it adapts to light/dark themes.
  */
 export function AgentIntentsLogo({
-	size = 28,
+	size = 32,
 	className,
 }: {
 	size?: number;
@@ -11,29 +11,47 @@ export function AgentIntentsLogo({
 }) {
 	return (
 		<svg
-			xmlns="http://www.w3.org/2000/svg"
-			viewBox="0 0 32 32"
-			fill="none"
 			width={size}
 			height={size}
+			viewBox="0 0 32 32"
+			fill="none"
+			xmlns="http://www.w3.org/2000/svg"
 			className={className}
 			aria-hidden="true"
 		>
-			{/* Shield outline */}
-			<path
-				d="M16 2L4 8v8c0 8 5.33 15.47 12 17 6.67-1.53 12-9 12-17V8L16 2z"
+			{/* Outer coin circle — represents payment */}
+			<circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2" />
+
+			{/* Bot head — represents the agent */}
+			<rect x="9" y="12" width="14" height="10" rx="3" stroke="currentColor" strokeWidth="1.5" />
+
+			{/* Left eye */}
+			<circle cx="13" cy="17" r="1.5" fill="currentColor" />
+
+			{/* Right eye */}
+			<circle cx="19" cy="17" r="1.5" fill="currentColor" />
+
+			{/* Antenna stem */}
+			<line
+				x1="16"
+				y1="12"
+				x2="16"
+				y2="7"
 				stroke="currentColor"
 				strokeWidth="1.5"
-				fill="currentColor"
-				fillOpacity="0.08"
-			/>
-			{/* Chevron-right — intent / action */}
-			<path
-				d="M13 11l5 5-5 5"
-				stroke="currentColor"
-				strokeWidth="2.2"
 				strokeLinecap="round"
-				strokeLinejoin="round"
+			/>
+
+			{/* Antenna tip — signal dot */}
+			<circle cx="16" cy="6" r="1.5" fill="currentColor" />
+
+			{/* Small signal arcs around antenna */}
+			<path
+				d="M12.5 5.5 C13.5 3.5 18.5 3.5 19.5 5.5"
+				stroke="currentColor"
+				strokeWidth="1"
+				strokeLinecap="round"
+				fill="none"
 			/>
 		</svg>
 	);

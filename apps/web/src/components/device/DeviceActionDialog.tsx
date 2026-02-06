@@ -187,7 +187,7 @@ export function DeviceActionDialog() {
 				<DialogHeader
 					appearance="compact"
 					title={config.title}
-					onClose={isError ? dismissDeviceAction : () => {}}
+					onClose={dismissDeviceAction}
 				/>
 				<DialogBody>
 					<div className="flex flex-col items-center gap-16 py-24">
