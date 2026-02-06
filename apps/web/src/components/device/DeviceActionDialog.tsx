@@ -1,29 +1,19 @@
 import { type DeviceActionUiState, useLedger } from "@/lib/ledger-provider";
-import { Button, Dialog, DialogBody, DialogContent, DialogHeader } from "@ledgerhq/lumen-ui-react";
+import {
+	Button,
+	Dialog,
+	DialogBody,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+} from "@ledgerhq/lumen-ui-react";
+import Lottie from "lottie-react";
+import { useMemo } from "react";
+import { type AnimationKey, type DeviceModel, getDeviceAnimation } from "./animations";
 
 // =============================================================================
-// Icon Components
+// Fallback icons (used when no lottie is available)
 // =============================================================================
-
-function SpinnerIcon({ className }: { className?: string }) {
-	return (
-		<svg
-			className={`animate-spin ${className ?? ""}`}
-			xmlns="http://www.w3.org/2000/svg"
-			fill="none"
-			viewBox="0 0 24 24"
-			role="img"
-			aria-label="Loading"
-		>
-			<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-			<path
-				className="opacity-75"
-				fill="currentColor"
-				d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-			/>
-		</svg>
-	);
-}
 
 function CheckIcon({ className }: { className?: string }) {
 	return (
@@ -67,97 +57,58 @@ function AlertIcon({ className }: { className?: string }) {
 	);
 }
 
-function LedgerDeviceIcon({ className }: { className?: string }) {
-	return (
-		<svg
-			className={className}
-			viewBox="0 0 48 48"
-			fill="none"
-			xmlns="http://www.w3.org/2000/svg"
-			role="img"
-			aria-label="Ledger device"
-		>
-			<rect x="8" y="12" width="32" height="24" rx="4" stroke="currentColor" strokeWidth="2" />
-			<rect x="14" y="18" width="20" height="12" rx="2" fill="currentColor" opacity="0.15" />
-			<circle cx="36" cy="24" r="2" fill="currentColor" />
-		</svg>
-	);
+// =============================================================================
+// Map UI state → animation key
+// =============================================================================
+
+function getAnimationKey(status: DeviceActionUiState["status"]): AnimationKey | null {
+	switch (status) {
+		case "unlock-device":
+			return "pin";
+		case "allow-secure-connection":
+		case "open-app":
+		case "confirm-open-app":
+		case "verify-address":
+		case "deriving-address":
+			return "continueOnLedger";
+		case "sign-transaction":
+		case "sign-message":
+		case "sign-typed-data":
+			return "signTransaction";
+		default:
+			return null;
+	}
 }
 
 // =============================================================================
-// Status Configuration
+// Status title mapping
 // =============================================================================
 
-type StatusConfig = {
-	icon: React.ReactNode;
-	title: string;
-	animate: boolean;
-};
-
-function getStatusConfig(state: DeviceActionUiState): StatusConfig {
-	switch (state.status) {
+function getStatusTitle(status: DeviceActionUiState["status"]): string {
+	switch (status) {
 		case "connecting":
+			return "Connecting";
 		case "deriving-address":
-			return {
-				icon: <SpinnerIcon className="size-48 text-interactive" />,
-				title: "Connecting",
-				animate: true,
-			};
+			return "Deriving Address";
 		case "unlock-device":
-			return {
-				icon: <LedgerDeviceIcon className="size-48 text-warning" />,
-				title: "Unlock Device",
-				animate: false,
-			};
+			return "Unlock Device";
 		case "allow-secure-connection":
-			return {
-				icon: <LedgerDeviceIcon className="size-48 text-interactive" />,
-				title: "Secure Connection",
-				animate: false,
-			};
+			return "Secure Connection";
 		case "open-app":
 		case "confirm-open-app":
-			return {
-				icon: <LedgerDeviceIcon className="size-48 text-interactive" />,
-				title: "Open App",
-				animate: false,
-			};
+			return "Open App";
 		case "sign-transaction":
-			return {
-				icon: <LedgerDeviceIcon className="size-48 text-interactive" />,
-				title: "Confirm Transaction",
-				animate: false,
-			};
+			return "Confirm Transaction";
 		case "sign-message":
-			return {
-				icon: <LedgerDeviceIcon className="size-48 text-interactive" />,
-				title: "Sign Message",
-				animate: false,
-			};
+			return "Sign Message";
 		case "sign-typed-data":
-			return {
-				icon: <LedgerDeviceIcon className="size-48 text-interactive" />,
-				title: "Sign Data",
-				animate: false,
-			};
+			return "Sign Data";
 		case "verify-address":
-			return {
-				icon: <LedgerDeviceIcon className="size-48 text-interactive" />,
-				title: "Verify Address",
-				animate: false,
-			};
+			return "Verify Address";
 		case "success":
-			return {
-				icon: <CheckIcon className="size-48 text-success" />,
-				title: "Success",
-				animate: false,
-			};
+			return "Success";
 		case "error":
-			return {
-				icon: <AlertIcon className="size-48 text-error" />,
-				title: "Error",
-				animate: false,
-			};
+			return "Error";
 	}
 }
 
@@ -166,32 +117,69 @@ function getStatusConfig(state: DeviceActionUiState): StatusConfig {
 // =============================================================================
 
 export function DeviceActionDialog() {
-	const { deviceActionState } = useLedger();
+	const { deviceActionState, deviceModelId, dismissDeviceAction } = useLedger();
+
+	// Resolve the device model for animation lookup
+	const deviceModel: DeviceModel = (deviceModelId as DeviceModel) ?? "generic";
+
+	// Get the lottie animation data for the current state
+	const animationData = useMemo(() => {
+		if (!deviceActionState) return null;
+		const key = getAnimationKey(deviceActionState.status);
+		if (!key) return null;
+		return getDeviceAnimation(deviceModel, key);
+	}, [deviceActionState, deviceModel]);
 
 	if (!deviceActionState) return null;
 
-	const config = getStatusConfig(deviceActionState);
+	const title = getStatusTitle(deviceActionState.status);
 	const isError = deviceActionState.status === "error";
+	const isSuccess = deviceActionState.status === "success";
+	const isConnecting = deviceActionState.status === "connecting";
+	const showDeviceHint =
+		!isError && !isSuccess && !isConnecting && deviceActionState.status !== "deriving-address";
 
 	return (
 		<Dialog
 			open={!!deviceActionState}
 			onOpenChange={() => {
-				// Only allow closing on error/success states (auto-dismiss handles success)
+				/* managed programmatically */
 			}}
 		>
 			<DialogContent>
 				<DialogHeader
 					appearance="compact"
-					title={config.title}
+					title={title}
 					onClose={() => {
-						// Allow closing only on error state
+						/* closing is managed programmatically */
 					}}
 				/>
 				<DialogBody>
 					<div className="flex flex-col items-center gap-24 py-32">
-						{/* Icon */}
-						<div className={config.animate ? "animate-pulse" : undefined}>{config.icon}</div>
+						{/* Lottie animation or fallback icon */}
+						{animationData ? (
+							<div className="w-[200px] h-[200px] flex items-center justify-center">
+								<Lottie
+									animationData={animationData}
+									loop
+									autoplay
+									style={{ width: "100%", height: "100%" }}
+								/>
+							</div>
+						) : isSuccess ? (
+							<div className="flex items-center justify-center size-64 rounded-full bg-success/10">
+								<CheckIcon className="size-32 text-success" />
+							</div>
+						) : isError ? (
+							<div className="flex items-center justify-center size-64 rounded-full bg-error/10">
+								<AlertIcon className="size-32 text-error" />
+							</div>
+						) : (
+							/* Connecting / deriving spinner */
+							<div className="flex items-center justify-center size-64">
+								<div className="size-40 border-4 border-muted border-t-interactive rounded-full animate-spin" />
+							</div>
+						)}
 
 						{/* Message */}
 						<p className={`body-1 text-center ${isError ? "text-error" : "text-base"}`}>
@@ -199,14 +187,20 @@ export function DeviceActionDialog() {
 						</p>
 
 						{/* Hint for device interaction states */}
-						{!isError &&
-							deviceActionState.status !== "success" &&
-							deviceActionState.status !== "connecting" &&
-							deviceActionState.status !== "deriving-address" && (
-								<p className="body-2 text-muted text-center">Check your Ledger device</p>
-							)}
+						{showDeviceHint && (
+							<p className="body-2 text-muted text-center">Check your Ledger device</p>
+						)}
 					</div>
 				</DialogBody>
+
+				{/* Allow dismissing error state */}
+				{isError && (
+					<DialogFooter>
+						<Button appearance="transparent" size="md" onClick={dismissDeviceAction}>
+							Close
+						</Button>
+					</DialogFooter>
+				)}
 			</DialogContent>
 		</Dialog>
 	);

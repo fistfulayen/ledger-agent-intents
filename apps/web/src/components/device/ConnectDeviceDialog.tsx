@@ -64,6 +64,8 @@ export function ConnectDeviceDialog() {
 		isConnected,
 		isConnecting,
 		account,
+		error,
+		dismissDeviceAction,
 	} = useLedger();
 
 	const [selectedTransport, setSelectedTransport] = useState<TransportType>("usb");
@@ -82,7 +84,10 @@ export function ConnectDeviceDialog() {
 				<DialogHeader
 					appearance="compact"
 					title={isConnected ? "Connected Device" : "Connect Ledger"}
-					onClose={() => setShowConnectDialog(false)}
+					onClose={() => {
+						dismissDeviceAction();
+						setShowConnectDialog(false);
+					}}
 				/>
 				<DialogBody>
 					{isConnected ? (
@@ -162,6 +167,7 @@ export function ConnectDeviceDialog() {
 								</button>
 							</div>
 
+							{/* Instructions */}
 							<div className="rounded-sm bg-muted-transparent p-12">
 								<p className="body-3 text-muted">
 									{selectedTransport === "usb"
@@ -169,6 +175,13 @@ export function ConnectDeviceDialog() {
 										: "Make sure your Ledger device has Bluetooth enabled and is unlocked."}
 								</p>
 							</div>
+
+							{/* Show connection error inline */}
+							{error && (
+								<div className="rounded-sm bg-error/10 p-12">
+									<p className="body-3 text-error">{error.message}</p>
+								</div>
+							)}
 						</div>
 					)}
 				</DialogBody>
@@ -178,7 +191,10 @@ export function ConnectDeviceDialog() {
 							<Button
 								appearance="transparent"
 								size="md"
-								onClick={() => setShowConnectDialog(false)}
+								onClick={() => {
+									dismissDeviceAction();
+									setShowConnectDialog(false);
+								}}
 								disabled={isConnecting}
 							>
 								Cancel
@@ -191,7 +207,7 @@ export function ConnectDeviceDialog() {
 									disabled={isConnecting}
 									className="w-full"
 								>
-									{isConnecting ? "Connecting..." : "Connect"}
+									{isConnecting ? "Connecting…" : "Connect"}
 								</Button>
 							</div>
 						</div>

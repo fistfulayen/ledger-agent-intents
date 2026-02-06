@@ -1,10 +1,13 @@
+import { ContextModuleBuilder, type ContextModuleDatasourceConfig } from "@ledgerhq/context-module";
 import {
 	DeviceActionStatus,
 	type DeviceManagementKit,
 	DeviceManagementKitBuilder,
+	type DeviceModelId,
 	type DeviceSessionId,
 	DeviceStatus,
 	type DiscoveredDevice,
+	type DmkError,
 	UserInteractionRequired,
 	hexaStringToBuffer,
 } from "@ledgerhq/device-management-kit";
@@ -81,6 +84,10 @@ interface LedgerContextType {
 	deviceActionState: DeviceActionUiState | null;
 	setShowConnectDialog: (show: boolean) => void;
 	showConnectDialog: boolean;
+	/** The model of the connected device, if known. */
+	deviceModelId: DeviceModelId | null;
+	/** Dismiss the current device action state (e.g. close an error dialog). */
+	dismissDeviceAction: () => void;
 }
 
 const LedgerContext = createContext<LedgerContextType | null>(null);
@@ -121,7 +128,6 @@ function getChain(chainId: number): Chain {
 }
 
 function getRpcUrl(chainId: number): string {
-	// Use custom RPC URL for Base mainnet if configured
 	if (chainId === 8453) {
 		const customRpc = import.meta.env.VITE_BASE_MAINNET_RPC_URL;
 		if (typeof customRpc === "string" && customRpc.trim().length > 0) {
@@ -140,11 +146,98 @@ const DEFAULT_DERIVATION_PATH = "44'/60'/0'/0/0";
 // =============================================================================
 
 function signatureToHex(sig: EthSignature): string {
-	// r and s are HexaStrings (0x-prefixed), v is a number
 	const r = sig.r.startsWith("0x") ? sig.r.slice(2) : sig.r;
 	const s = sig.s.startsWith("0x") ? sig.s.slice(2) : sig.s;
 	const v = sig.v.toString(16).padStart(2, "0");
 	return `0x${r}${s}${v}`;
+}
+
+// =============================================================================
+// Helper: DmkError handling
+// =============================================================================
+
+function isDmkError(error: unknown): error is DmkError {
+	return typeof error === "object" && error !== null && "_tag" in error;
+}
+
+function humanizeError(error: unknown): string {
+	if (!isDmkError(error)) {
+		if (error instanceof Error) return error.message;
+		return String(error);
+	}
+
+	switch (error._tag) {
+		case "DeviceNotOnboardedError":
+			return "Please set up your Ledger device first.";
+		case "DeviceLockedError":
+			return "Your Ledger device is locked. Please unlock it.";
+		case "RefusedByUserDAError":
+			return "Action was rejected on the device.";
+		case "OpeningConnectionError":
+			return "Could not connect to the device. Make sure it's connected and unlocked.";
+		case "DeviceDisconnectedWhileSendingError":
+		case "DeviceDisconnectedBeforeSendingApdu":
+			return "Device was disconnected during the operation.";
+		case "TransportNotSupportedError":
+			return "This browser does not support the selected transport. Please try Chrome or Edge.";
+		case "NoAccessibleDeviceError":
+			return "No Ledger device found. Make sure it's connected and unlocked.";
+		case "DeviceAlreadyConnectedError":
+			return "This device is already connected.";
+		case "DeviceBusyError":
+		case "SendApduConcurrencyError":
+		case "AlreadySendingApduError":
+			return "Device is busy. Please wait and try again.";
+		case "UnsupportedFirmwareDAError":
+			return "Your device firmware is not supported. Please update your Ledger.";
+		case "UnsupportedApplicationDAError":
+			return "The Ethereum app on your device is not supported. Please update it via Ledger Live.";
+		case "UnknownDAError":
+		case "UnknownDeviceExchangeError":
+			return "An unexpected error occurred. Please reconnect your device and try again.";
+		default:
+			break;
+	}
+
+	// Check for specific APDU error codes
+	if ("errorCode" in error) {
+		const code = String((error as { errorCode: unknown }).errorCode);
+		switch (code) {
+			case "6985":
+			case "5501":
+				return "Action was cancelled on the device.";
+			case "6a80":
+				return "Blind signing is disabled. Enable it in the Ethereum app settings on your device.";
+			case "6d00":
+				return "The Ethereum app is not open on your device. Please open it.";
+		}
+	}
+
+	return error.message ?? `Device error: ${error._tag}`;
+}
+
+// =============================================================================
+// Helper: build an Ethereum signer with context module
+// =============================================================================
+
+function buildEthSigner(dmk: DeviceManagementKit, sessionId: DeviceSessionId) {
+	const loggerFactory = dmk.getLoggerFactory();
+	const datasourceConfig: ContextModuleDatasourceConfig = { proxy: "safe" };
+
+	const contextModule = new ContextModuleBuilder({
+		originToken: LEDGER_API_KEY,
+		loggerFactory,
+	})
+		.setDatasourceConfig(datasourceConfig)
+		.build();
+
+	return new SignerEthBuilder({
+		dmk,
+		sessionId,
+		originToken: LEDGER_API_KEY,
+	})
+		.withContextModule(contextModule)
+		.build();
 }
 
 // =============================================================================
@@ -158,6 +251,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 	const [error, setError] = useState<Error | null>(null);
 	const [deviceActionState, setDeviceActionState] = useState<DeviceActionUiState | null>(null);
 	const [showConnectDialog, setShowConnectDialog] = useState(false);
+	const [deviceModelId, setDeviceModelId] = useState<DeviceModelId | null>(null);
 
 	const sessionIdRef = useRef<DeviceSessionId | null>(null);
 	const derivationPathRef = useRef<string>(DEFAULT_DERIVATION_PATH);
@@ -183,19 +277,18 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			next: (state) => {
 				if (state.deviceStatus === DeviceStatus.NOT_CONNECTED) {
 					setAccount(null);
+					setDeviceModelId(null);
 					sessionIdRef.current = null;
 					setDeviceActionState({
 						status: "error",
-						message: "Device disconnected",
+						message: "Device disconnected. Please reconnect your Ledger.",
 						error: new Error("Device disconnected"),
 					});
-					// Auto-dismiss the error after 3 seconds
-					setTimeout(() => setDeviceActionState(null), 3000);
 				}
 			},
 			error: () => {
-				// Session gone
 				setAccount(null);
+				setDeviceModelId(null);
 				sessionIdRef.current = null;
 			},
 		});
@@ -213,9 +306,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			setDeviceActionState({
 				status: "connecting",
 				message:
-					transport === "ble"
-						? "Searching for Bluetooth devices..."
-						: "Searching for USB devices...",
+					transport === "ble" ? "Searching for Bluetooth devices…" : "Searching for USB devices…",
 			});
 
 			try {
@@ -224,7 +315,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				// Check environment support
 				if (!dmk.isEnvironmentSupported()) {
 					throw new Error(
-						"Your browser does not support WebHID or WebBLE. Please use a compatible browser like Chrome.",
+						"Your browser does not support WebHID or Web Bluetooth. Please use Chrome or Edge.",
 					);
 				}
 
@@ -239,32 +330,34 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				// Connect to device
 				setDeviceActionState({
 					status: "connecting",
-					message: "Connecting to your Ledger...",
+					message: "Connecting to your Ledger…",
 				});
 
 				const sessionId = await dmk.connect({
 					device,
-					sessionRefresherOptions: {
-						isRefresherDisabled: true,
-					},
+					sessionRefresherOptions: { isRefresherDisabled: true },
 				});
 
 				sessionIdRef.current = sessionId;
 
-				// Wait for device session to be ready
+				// Retrieve connected device info for model detection
+				try {
+					const connectedDevice = dmk.getConnectedDevice({
+						sessionId,
+					});
+					setDeviceModelId(connectedDevice.modelId);
+				} catch {
+					// Non-fatal: animations will fall back to generic
+				}
+
+				// Derive address
 				setDeviceActionState({
 					status: "deriving-address",
-					message: "Deriving your address...",
+					message: "Deriving your address…",
 				});
 
-				// Build the Ethereum signer
-				const ethSigner = new SignerEthBuilder({
-					dmk,
-					sessionId,
-					originToken: LEDGER_API_KEY,
-				}).build();
+				const ethSigner = buildEthSigner(dmk, sessionId);
 
-				// Get address from device
 				const { observable: addressObservable } = ethSigner.getAddress(derivationPathRef.current, {
 					checkOnDevice: false,
 				});
@@ -280,12 +373,11 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				);
 
 				if (addressState.status === DeviceActionStatus.Error) {
-					throw new Error(`Failed to derive address: ${String(addressState.error)}`);
+					throw addressState.error ?? new Error("Failed to derive address");
 				}
 
 				if (addressState.status === DeviceActionStatus.Completed) {
-					const address = addressState.output.address;
-					setAccount(address);
+					setAccount(addressState.output.address);
 				}
 
 				// Start monitoring the session for disconnects
@@ -295,21 +387,19 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					status: "success",
 					message: "Connected successfully",
 				});
-
-				// Auto-dismiss success state
 				setTimeout(() => setDeviceActionState(null), 1500);
 				setShowConnectDialog(false);
 			} catch (err) {
-				const errorObj = err instanceof Error ? err : new Error("Connection failed");
+				const message = humanizeError(err);
+				const errorObj = new Error(message);
 				setError(errorObj);
 				setDeviceActionState({
 					status: "error",
-					message: errorObj.message,
+					message,
 					error: errorObj,
 				});
 			} finally {
 				setIsConnecting(false);
-				// Make sure discovery is stopped
 				try {
 					getDmk().stopDiscovering();
 				} catch {
@@ -336,6 +426,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 		deviceSessionSubRef.current = null;
 		sessionIdRef.current = null;
 		setAccount(null);
+		setDeviceModelId(null);
 		setError(null);
 		setDeviceActionState(null);
 	}, []);
@@ -419,12 +510,11 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 										});
 										break;
 									case UserInteractionRequired.None:
-										// No user interaction needed, keep current state
 										break;
 									default:
 										setDeviceActionState({
 											status: "open-app",
-											message: `Please check your device... (${interaction})`,
+											message: `Please check your device… (${interaction})`,
 										});
 										break;
 								}
@@ -440,27 +530,11 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 								resolve(state.output);
 								break;
 							case DeviceActionStatus.Error: {
-								const errMsg = String(state.error);
-								const isUserRejection =
-									errMsg.includes("6985") ||
-									errMsg.toLowerCase().includes("reject") ||
-									errMsg.toLowerCase().includes("denied");
-								const isBlindSigning = errMsg.includes("6a80");
-
-								let userMessage: string;
-								if (isUserRejection) {
-									userMessage = "Transaction rejected on device";
-								} else if (isBlindSigning) {
-									userMessage =
-										"Blind signing is disabled. Enable it in the Ethereum app settings on your device.";
-								} else {
-									userMessage = `${operationLabel} failed: ${errMsg}`;
-								}
-
-								const errorObj = new Error(userMessage);
+								const message = humanizeError(state.error);
+								const errorObj = new Error(message);
 								setDeviceActionState({
 									status: "error",
-									message: userMessage,
+									message,
 									error: errorObj,
 								});
 								subscription.unsubscribe();
@@ -474,10 +548,11 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 						}
 					},
 					error: (err) => {
-						const errorObj = err instanceof Error ? err : new Error(`${operationLabel} failed`);
+						const message = humanizeError(err);
+						const errorObj = new Error(message);
 						setDeviceActionState({
 							status: "error",
-							message: errorObj.message,
+							message,
 							error: errorObj,
 						});
 						reject(errorObj);
@@ -500,7 +575,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 			setDeviceActionState({
 				status: "open-app",
-				message: "Preparing transaction...",
+				message: "Preparing transaction…",
 			});
 
 			try {
@@ -511,7 +586,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 				const senderAddress = account as `0x${string}`;
 
-				// Get nonce and gas estimates
+				// Get nonce and gas estimates in parallel
 				const [nonce, gasPrice, estimatedGas] = await Promise.all([
 					publicClient.getTransactionCount({ address: senderAddress }),
 					publicClient.getGasPrice(),
@@ -523,33 +598,25 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					}),
 				]);
 
-				// Build the unsigned transaction
 				const unsignedTx: TransactionSerializable = {
 					to: tx.to as `0x${string}`,
 					data: tx.data as `0x${string}`,
 					value: tx.value ? BigInt(tx.value) : 0n,
 					nonce,
-					gas: estimatedGas + (estimatedGas * 20n) / 100n, // 20% buffer
+					gas: estimatedGas + (estimatedGas * 20n) / 100n,
 					gasPrice,
 					chainId: currentChainId,
 					type: "legacy" as const,
 				};
 
-				// Serialize to raw bytes for the device
 				const serializedTx = serializeTransaction(unsignedTx);
 				const txBytes = hexaStringToBuffer(serializedTx);
 				if (!txBytes) {
 					throw new Error("Failed to serialize transaction");
 				}
 
-				// Build signer
-				const ethSigner = new SignerEthBuilder({
-					dmk,
-					sessionId,
-					originToken: LEDGER_API_KEY,
-				}).build();
+				const ethSigner = buildEthSigner(dmk, sessionId);
 
-				// Sign transaction on device
 				const { observable: signObservable } = ethSigner.signTransaction(
 					derivationPathRef.current,
 					txBytes,
@@ -558,7 +625,6 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 				const signature = await observeDeviceAction(signObservable, "Transaction");
 
-				// Reconstruct signed transaction
 				const r = signature.r.startsWith("0x") ? signature.r : `0x${signature.r}`;
 				const s = signature.s.startsWith("0x") ? signature.s : `0x${signature.s}`;
 
@@ -568,10 +634,9 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					v: BigInt(signature.v),
 				});
 
-				// Broadcast via RPC
 				setDeviceActionState({
 					status: "success",
-					message: "Broadcasting transaction...",
+					message: "Broadcasting transaction…",
 				});
 
 				const txHash = await publicClient.sendRawTransaction({
@@ -586,16 +651,15 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 				return txHash;
 			} catch (err) {
-				const errorObj = err instanceof Error ? err : new Error("Transaction failed");
-				// Don't override device action state if it was already set by observeDeviceAction
 				if (!deviceActionState || deviceActionState.status !== "error") {
+					const message = humanizeError(err);
 					setDeviceActionState({
 						status: "error",
-						message: errorObj.message,
-						error: errorObj,
+						message,
+						error: new Error(message),
 					});
 				}
-				throw errorObj;
+				throw err instanceof Error ? err : new Error(humanizeError(err));
 			}
 		},
 		[account, chainId, ensureSession, observeDeviceAction, deviceActionState],
@@ -610,22 +674,15 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 			setDeviceActionState({
 				status: "open-app",
-				message: "Preparing to sign typed data...",
+				message: "Preparing to sign typed data…",
 			});
 
 			try {
-				// Parse the typed data if it's a string
 				const parsed: TypedData =
 					typeof typedData === "string" ? JSON.parse(typedData) : (typedData as TypedData);
 
-				// Build signer
-				const ethSigner = new SignerEthBuilder({
-					dmk,
-					sessionId,
-					originToken: LEDGER_API_KEY,
-				}).build();
+				const ethSigner = buildEthSigner(dmk, sessionId);
 
-				// Sign typed data on device
 				const { observable: signObservable } = ethSigner.signTypedData(
 					derivationPathRef.current,
 					parsed,
@@ -636,15 +693,15 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 				return signatureToHex(signature);
 			} catch (err) {
-				const errorObj = err instanceof Error ? err : new Error("Typed data signing failed");
 				if (!deviceActionState || deviceActionState.status !== "error") {
+					const message = humanizeError(err);
 					setDeviceActionState({
 						status: "error",
-						message: errorObj.message,
-						error: errorObj,
+						message,
+						error: new Error(message),
 					});
 				}
-				throw errorObj;
+				throw err instanceof Error ? err : new Error(humanizeError(err));
 			}
 		},
 		[ensureSession, observeDeviceAction, deviceActionState],
@@ -659,18 +716,12 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 			setDeviceActionState({
 				status: "open-app",
-				message: "Preparing to sign message...",
+				message: "Preparing to sign message…",
 			});
 
 			try {
-				// Build signer
-				const ethSigner = new SignerEthBuilder({
-					dmk,
-					sessionId,
-					originToken: LEDGER_API_KEY,
-				}).build();
+				const ethSigner = buildEthSigner(dmk, sessionId);
 
-				// Sign personal message on device
 				const { observable: signObservable } = ethSigner.signMessage(
 					derivationPathRef.current,
 					message,
@@ -681,15 +732,15 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 				return signatureToHex(signature);
 			} catch (err) {
-				const errorObj = err instanceof Error ? err : new Error("Message signing failed");
 				if (!deviceActionState || deviceActionState.status !== "error") {
+					const message = humanizeError(err);
 					setDeviceActionState({
 						status: "error",
-						message: errorObj.message,
-						error: errorObj,
+						message,
+						error: new Error(message),
 					});
 				}
-				throw errorObj;
+				throw err instanceof Error ? err : new Error(humanizeError(err));
 			}
 		},
 		[ensureSession, observeDeviceAction, deviceActionState],
@@ -700,6 +751,10 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 	// -----------------------------------------------------------------------
 	const openLedgerModal = useCallback(() => {
 		setShowConnectDialog(true);
+	}, []);
+
+	const dismissDeviceAction = useCallback(() => {
+		setDeviceActionState(null);
 	}, []);
 
 	// -----------------------------------------------------------------------
@@ -721,6 +776,8 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			deviceActionState,
 			setShowConnectDialog,
 			showConnectDialog,
+			deviceModelId,
+			dismissDeviceAction,
 		}),
 		[
 			account,
@@ -735,6 +792,8 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			openLedgerModal,
 			deviceActionState,
 			showConnectDialog,
+			deviceModelId,
+			dismissDeviceAction,
 		],
 	);
 
