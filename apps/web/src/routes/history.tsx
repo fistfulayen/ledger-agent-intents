@@ -10,7 +10,7 @@ import { ChainLogo } from "@/components/ui/ChainLogo";
 import { IntentDetailDialog } from "@/components/intents/IntentDetailDialog";
 import type { Intent, SupportedChainId } from "@agent-intents/shared";
 import { SUPPORTED_CHAINS } from "@agent-intents/shared";
-import { AmountDisplay, Button, Tag, type FormattedValue } from "@ledgerhq/lumen-ui-react";
+import { AmountDisplay, type FormattedValue } from "@ledgerhq/lumen-ui-react";
 import { useState } from "react";
 
 export const Route = createFileRoute("/history")({
@@ -52,7 +52,7 @@ const usdcFormatter = (value: number): FormattedValue => {
 
 function HistoryPage() {
 	const { account, isConnected } = useLedger();
-	const { status: authStatus, error: authError, authenticate } = useWalletAuth();
+	const { status: authStatus, error: authError } = useWalletAuth();
 
 	const { data: intents, isLoading } = useQuery({
 		...intentsQueryOptions(account?.toLowerCase() ?? ""),
@@ -115,28 +115,21 @@ function HistoryPage() {
 						Connect your Ledger to view transaction history
 					</p>
 				</div>
-			) : authStatus === "checking" ? (
-				<div className="flex items-center justify-center py-48">
-					<Spinner size="lg" />
-				</div>
-			) : authStatus === "unauthenticated" || authStatus === "error" ? (
-				<div className="flex flex-col items-center gap-12 rounded-lg bg-surface border border-muted p-24">
-					<p className="body-1 text-muted text-center">
-						Authenticate with your Ledger to view transaction history.
-					</p>
-					{authError && (
-						<div className="rounded-sm bg-error-transparent px-12 py-8 body-3 text-error">
-							{authError.message}
-						</div>
+			) : authStatus === "checking" || authStatus === "authing" || authStatus === "unauthenticated" || authStatus === "error" ? (
+				<div className="flex flex-col items-center gap-8 py-48">
+					<div className="flex items-center gap-8">
+						<Spinner size="sm" />
+						<span className="body-2 text-muted">
+							{authStatus === "checking"
+								? "Checking session…"
+								: authStatus === "error"
+									? "Retrying authentication…"
+									: "Authenticating…"}
+						</span>
+					</div>
+					{authStatus === "error" && authError && (
+						<span className="body-3 text-muted-subtle">{authError.message}</span>
 					)}
-					<Button appearance="accent" size="md" onClick={authenticate}>
-						Authenticate
-					</Button>
-				</div>
-			) : authStatus === "authing" ? (
-				<div className="flex items-center justify-center gap-8 py-48">
-					<Spinner size="sm" />
-					<span className="body-2 text-muted">Signing authentication challenge…</span>
 				</div>
 			) : isLoading ? (
 				<div className="flex items-center justify-center py-48">

@@ -18,7 +18,7 @@ export const Route = createFileRoute("/pay/$intentId")({
 function PayPage() {
 	const { intentId } = Route.useParams();
 	const { isConnected, isConnecting, openLedgerModal, account } = useLedger();
-	const { status: authStatus, error: authError, authenticate } = useWalletAuth();
+	const { status: authStatus, error: authError } = useWalletAuth();
 
 	const {
 		data: intent,
@@ -117,29 +117,21 @@ function PayPage() {
 									<div className="rounded-lg bg-warning-transparent px-16 py-12 body-2 text-warning text-center">
 										This payment is for a different wallet. Please connect the correct Ledger device.
 									</div>
-								) : authStatus === "checking" ? (
-									<div className="flex items-center justify-center gap-8 py-12">
-										<Spinner size="sm" />
-										<span className="body-2 text-muted">Checking session…</span>
-									</div>
-								) : authStatus === "authing" ? (
-									<div className="flex items-center justify-center gap-8 py-12">
-										<Spinner size="sm" />
-										<span className="body-2 text-muted">Signing authentication challenge…</span>
-									</div>
 								) : authStatus !== "authed" ? (
-									<div className="flex flex-col items-center gap-12 rounded-lg bg-muted-transparent p-24">
-										<p className="body-2 text-muted text-center">
-											Authenticate with your Ledger to {isX402 ? "authorize" : "sign"} this payment.
-										</p>
-										{authError && (
-											<div className="rounded-sm bg-error-transparent px-12 py-8 body-3 text-error">
-												{authError.message}
-											</div>
+									<div className="flex flex-col items-center gap-8 py-12">
+										<div className="flex items-center gap-8">
+											<Spinner size="sm" />
+											<span className="body-2 text-muted">
+												{authStatus === "checking"
+													? "Checking session…"
+													: authStatus === "error"
+														? "Retrying authentication…"
+														: "Authenticating…"}
+											</span>
+										</div>
+										{authStatus === "error" && authError && (
+											<span className="body-3 text-muted-subtle">{authError.message}</span>
 										)}
-										<Button appearance="accent" size="md" onClick={authenticate}>
-											Authenticate
-										</Button>
 									</div>
 								) : (
 									<div className="rounded-lg border border-muted-subtle bg-surface p-16">

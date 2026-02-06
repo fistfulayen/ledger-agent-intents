@@ -14,13 +14,18 @@ const API_BASE = import.meta.env.DEV ? (import.meta.env.VITE_BACKEND_URL || "") 
  */
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
 
+/** Maximum number of automatic retry attempts before giving up. */
+const MAX_AUTO_RETRIES = 3;
+/** Base delay (ms) for exponential backoff between retries. */
+const RETRY_BASE_DELAY_MS = 2000;
+
 /**
  * - `idle`             – no wallet connected yet
  * - `checking`         – validating existing session cookie via GET /api/me
  * - `authed`           – valid session exists (cookie or just-signed)
- * - `unauthenticated`  – no valid session; user must click "Authenticate"
+ * - `unauthenticated`  – no valid session; signing prompt will be triggered
  * - `authing`          – EIP-712 challenge-sign-verify in progress
- * - `error`            – auth attempt failed
+ * - `error`            – auth attempt failed (will auto-retry)
  */
 export type AuthStatus =
 	| "idle"
@@ -79,6 +84,18 @@ export function useWalletAuth(): {
 	const checkingRef = useRef(false);
 	const lastCheckedWalletRef = useRef<string | null>(null);
 	const authingRef = useRef(false);
+	const retryCountRef = useRef(0);
+	const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// ── Cleanup retry timer on unmount or disconnect ────────────────────
+	useEffect(() => {
+		return () => {
+			if (retryTimerRef.current) {
+				clearTimeout(retryTimerRef.current);
+				retryTimerRef.current = null;
+			}
+		};
+	}, []);
 
 	// ── Passive phase ───────────────────────────────────────────────────
 	// When AUTH_ENABLED: check for an existing session cookie on connect.
@@ -89,6 +106,11 @@ export function useWalletAuth(): {
 				setStatus("idle");
 				setError(null);
 				lastCheckedWalletRef.current = null;
+				retryCountRef.current = 0;
+				if (retryTimerRef.current) {
+					clearTimeout(retryTimerRef.current);
+					retryTimerRef.current = null;
+				}
 			}
 			return;
 		}
@@ -110,6 +132,7 @@ export function useWalletAuth(): {
 		lastCheckedWalletRef.current = walletLower;
 		setStatus("checking");
 		setError(null);
+		retryCountRef.current = 0;
 
 		(async () => {
 			try {
@@ -124,7 +147,6 @@ export function useWalletAuth(): {
 	}, [isConnected, account, status]);
 
 	// ── Active phase: full challenge → sign → verify ────────────────────
-	// Only runs when the user explicitly calls authenticate().
 	const authenticate = useCallback(() => {
 		if (!AUTH_ENABLED) return;
 		if (!isConnected || !account || !chainId) return;
@@ -164,6 +186,7 @@ export function useWalletAuth(): {
 				}
 
 				setStatus("authed");
+				retryCountRef.current = 0;
 			} catch (e) {
 				const err = e instanceof Error ? e : new Error("Authentication failed");
 				setError(err);
@@ -173,6 +196,35 @@ export function useWalletAuth(): {
 			}
 		})();
 	}, [isConnected, account, chainId, signTypedDataV4]);
+
+	// ── Auto-trigger: sign automatically when unauthenticated ───────────
+	useEffect(() => {
+		if (status === "unauthenticated") {
+			authenticate();
+		}
+	}, [status, authenticate]);
+
+	// ── Auto-retry on error with exponential backoff ────────────────────
+	useEffect(() => {
+		if (status !== "error") return;
+		if (retryCountRef.current >= MAX_AUTO_RETRIES) return;
+
+		const delay = RETRY_BASE_DELAY_MS * 2 ** retryCountRef.current;
+		retryCountRef.current += 1;
+
+		retryTimerRef.current = setTimeout(() => {
+			retryTimerRef.current = null;
+			// Reset to unauthenticated so the auto-trigger fires again
+			setStatus("unauthenticated");
+		}, delay);
+
+		return () => {
+			if (retryTimerRef.current) {
+				clearTimeout(retryTimerRef.current);
+				retryTimerRef.current = null;
+			}
+		};
+	}, [status]);
 
 	return { status, error, authenticate };
 }

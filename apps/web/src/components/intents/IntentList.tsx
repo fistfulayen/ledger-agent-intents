@@ -3,7 +3,7 @@ import { useWalletAuth } from "@/lib/wallet-auth";
 import { Spinner } from "@/components/ui/Spinner";
 import { intentsQueryOptions } from "@/queries/intents";
 import type { Intent } from "@agent-intents/shared";
-import { AmountDisplay, Button, type FormattedValue } from "@ledgerhq/lumen-ui-react";
+import { AmountDisplay, type FormattedValue } from "@ledgerhq/lumen-ui-react";
 import { useQuery } from "@tanstack/react-query";
 import { IntentTable } from "./IntentTable";
 
@@ -54,7 +54,7 @@ const usdcFormatter = (value: number): FormattedValue => {
 
 export function IntentList() {
 	const { account, isConnected } = useLedger();
-	const { status: authStatus, error: authError, authenticate } = useWalletAuth();
+	const { status: authStatus, error: authError } = useWalletAuth();
 
 	const {
 		data: intents,
@@ -106,39 +106,22 @@ export function IntentList() {
 			)}
 			</div>
 
-			{/* Auth prompt — shown when connected but no session yet */}
-			{isConnected && (authStatus === "unauthenticated" || authStatus === "error") && (
-				<div className="flex flex-col items-center gap-12 rounded-lg bg-muted-transparent p-24">
-					<p className="body-2 text-muted text-center">
-						Authenticate with your Ledger to view and manage your intents.
-					</p>
-					{authError && (
-						<div className="rounded-sm bg-error-transparent px-12 py-8 body-3 text-error">
-							{authError.message}
-						</div>
+			{/* Auth in progress — shown when connected but authenticating */}
+			{isConnected && (authStatus === "checking" || authStatus === "authing" || authStatus === "unauthenticated" || authStatus === "error") && (
+				<div className="flex flex-col items-center gap-8 py-12">
+					<div className="flex items-center gap-8">
+						<Spinner size="sm" />
+						<span className="body-2 text-muted">
+							{authStatus === "checking"
+								? "Checking session…"
+								: authStatus === "error"
+									? "Retrying authentication…"
+									: "Authenticating…"}
+						</span>
+					</div>
+					{authStatus === "error" && authError && (
+						<span className="body-3 text-muted-subtle">{authError.message}</span>
 					)}
-					<Button
-						appearance="accent"
-						size="md"
-						onClick={authenticate}
-						disabled={authStatus === "authing"}
-					>
-						Authenticate
-					</Button>
-				</div>
-			)}
-
-			{isConnected && authStatus === "authing" && (
-				<div className="flex items-center justify-center gap-8 py-12">
-					<Spinner size="sm" />
-					<span className="body-2 text-muted">Signing authentication challenge…</span>
-				</div>
-			)}
-
-			{isConnected && authStatus === "checking" && (
-				<div className="flex items-center justify-center gap-8 py-12">
-					<Spinner size="sm" />
-					<span className="body-2 text-muted">Checking session…</span>
 				</div>
 			)}
 
