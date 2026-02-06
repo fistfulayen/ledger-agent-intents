@@ -691,9 +691,11 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				}
 
 				if (deviceLocked) {
-					// Close the connect dialog so DeviceActionDialog is visible
+					// Close the connect dialog so DeviceActionDialog is visible.
+					// Keep connectingTransport set so that when we re-open the
+					// dialog after unlock it shows "Waiting for device" instead
+					// of briefly flashing the transport selector.
 					setShowConnectDialog(false);
-					setConnectingTransport(null);
 
 					// Show the unlock Lottie
 					setDeviceActionState({
