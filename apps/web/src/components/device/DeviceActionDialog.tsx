@@ -69,7 +69,6 @@ function getAnimationKey(status: DeviceActionUiState["status"]): AnimationKey | 
 		case "open-app":
 		case "confirm-open-app":
 		case "verify-address":
-		case "deriving-address":
 			return "continueOnLedger";
 		case "sign-transaction":
 		case "sign-message":
@@ -81,34 +80,58 @@ function getAnimationKey(status: DeviceActionUiState["status"]): AnimationKey | 
 }
 
 // =============================================================================
-// Status title mapping
+// Status configuration
 // =============================================================================
 
-function getStatusTitle(status: DeviceActionUiState["status"]): string {
+type StatusConfig = {
+	title: string;
+	subtitle: string | null;
+};
+
+function getStatusConfig(status: DeviceActionUiState["status"]): StatusConfig {
 	switch (status) {
 		case "connecting":
-			return "Connecting";
-		case "deriving-address":
-			return "Deriving Address";
+			return { title: "Connecting", subtitle: null };
 		case "unlock-device":
-			return "Unlock Device";
+			return {
+				title: "Unlock your Ledger",
+				subtitle: "Enter your PIN code on your device.",
+			};
 		case "allow-secure-connection":
-			return "Secure Connection";
+			return {
+				title: "Continue on your Ledger",
+				subtitle: "Follow the instructions displayed on your Secure Touchscreen.",
+			};
 		case "open-app":
 		case "confirm-open-app":
-			return "Open App";
+			return {
+				title: "Continue on your Ledger",
+				subtitle: "Follow the instructions displayed on your Secure Touchscreen.",
+			};
 		case "sign-transaction":
-			return "Confirm Transaction";
+			return {
+				title: "Continue on your Ledger",
+				subtitle: "Follow the instructions displayed on your Secure Touchscreen.",
+			};
 		case "sign-message":
-			return "Sign Message";
+			return {
+				title: "Continue on your Ledger",
+				subtitle: "Follow the instructions displayed on your Secure Touchscreen.",
+			};
 		case "sign-typed-data":
-			return "Sign Data";
+			return {
+				title: "Continue on your Ledger",
+				subtitle: "Follow the instructions displayed on your Secure Touchscreen.",
+			};
 		case "verify-address":
-			return "Verify Address";
+			return {
+				title: "Continue on your Ledger",
+				subtitle: "Follow the instructions displayed on your Secure Touchscreen.",
+			};
 		case "success":
-			return "Success";
+			return { title: "Success", subtitle: null };
 		case "error":
-			return "Error";
+			return { title: "Error", subtitle: null };
 	}
 }
 
@@ -132,12 +155,9 @@ export function DeviceActionDialog() {
 
 	if (!deviceActionState) return null;
 
-	const title = getStatusTitle(deviceActionState.status);
+	const config = getStatusConfig(deviceActionState.status);
 	const isError = deviceActionState.status === "error";
 	const isSuccess = deviceActionState.status === "success";
-	const isConnecting = deviceActionState.status === "connecting";
-	const showDeviceHint =
-		!isError && !isSuccess && !isConnecting && deviceActionState.status !== "deriving-address";
 
 	return (
 		<Dialog
@@ -149,13 +169,11 @@ export function DeviceActionDialog() {
 			<DialogContent>
 				<DialogHeader
 					appearance="compact"
-					title={title}
-					onClose={() => {
-						/* closing is managed programmatically */
-					}}
+					title={config.title}
+					onClose={isError ? dismissDeviceAction : () => {}}
 				/>
 				<DialogBody>
-					<div className="flex flex-col items-center gap-24 py-32">
+					<div className="flex flex-col items-center gap-16 py-24">
 						{/* Lottie animation or fallback icon */}
 						{animationData ? (
 							<div className="w-[200px] h-[200px] flex items-center justify-center">
@@ -175,20 +193,22 @@ export function DeviceActionDialog() {
 								<AlertIcon className="size-32 text-error" />
 							</div>
 						) : (
-							/* Connecting / deriving spinner */
+							/* Connecting spinner */
 							<div className="flex items-center justify-center size-64">
 								<div className="size-40 border-4 border-muted border-t-interactive rounded-full animate-spin" />
 							</div>
 						)}
 
-						{/* Message */}
-						<p className={`body-1 text-center ${isError ? "text-error" : "text-base"}`}>
-							{deviceActionState.message}
-						</p>
+						{/* Title text (below animation for device-interaction states) */}
+						{config.subtitle && <p className="heading-5 text-center text-base">{config.title}</p>}
 
-						{/* Hint for device interaction states */}
-						{showDeviceHint && (
-							<p className="body-2 text-muted text-center">Check your Ledger device</p>
+						{/* Subtitle / instructions */}
+						{config.subtitle ? (
+							<p className="body-2 text-muted text-center">{config.subtitle}</p>
+						) : (
+							<p className={`body-1 text-center ${isError ? "text-error" : "text-base"}`}>
+								{deviceActionState.message}
+							</p>
 						)}
 					</div>
 				</DialogBody>

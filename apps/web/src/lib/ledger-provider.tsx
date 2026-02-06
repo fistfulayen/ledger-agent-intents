@@ -63,8 +63,7 @@ export type DeviceActionUiState = {
 		| "sign-typed-data"
 		| "verify-address"
 		| "success"
-		| "error"
-		| "deriving-address";
+		| "error";
 	message: string;
 	error?: Error;
 };
@@ -301,6 +300,9 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 	// -----------------------------------------------------------------------
 	const connect = useCallback(
 		async (transport: TransportType = "usb") => {
+			// Close the connect dialog immediately so it doesn't overlap
+			// with the DeviceActionDialog
+			setShowConnectDialog(false);
 			setIsConnecting(true);
 			setError(null);
 			setDeviceActionState({
@@ -350,12 +352,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					// Non-fatal: animations will fall back to generic
 				}
 
-				// Derive address
-				setDeviceActionState({
-					status: "deriving-address",
-					message: "Deriving your address…",
-				});
-
+				// Derive address — keep spinner on "Connecting" (no separate state)
 				const ethSigner = buildEthSigner(dmk, sessionId);
 
 				const { observable: addressObservable } = ethSigner.getAddress(derivationPathRef.current, {
@@ -388,7 +385,6 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					message: "Connected successfully",
 				});
 				setTimeout(() => setDeviceActionState(null), 1500);
-				setShowConnectDialog(false);
 			} catch (err) {
 				const message = humanizeError(err);
 				const errorObj = new Error(message);
