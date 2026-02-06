@@ -5,9 +5,11 @@ import {
 	DeviceManagementKitBuilder,
 	type DeviceModelId,
 	type DeviceSessionId,
+	DeviceSessionStateType,
 	DeviceStatus,
 	type DiscoveredDevice,
 	type DmkError,
+	OpenAppWithDependenciesDeviceAction,
 	UserInteractionRequired,
 	hexaStringToBuffer,
 } from "@ledgerhq/device-management-kit";
@@ -28,7 +30,8 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { firstValueFrom } from "rxjs";
+import { firstValueFrom, lastValueFrom } from "rxjs";
+import { filter, timeout } from "rxjs/operators";
 import {
 	http,
 	type Chain,
@@ -44,6 +47,11 @@ import { base, baseSepolia, sepolia } from "viem/chains";
 
 export type TransportType = "usb" | "ble";
 
+export interface DerivedAddress {
+	address: string;
+	derivationPath: string;
+}
+
 interface TransactionRequest {
 	to: string;
 	data: string;
@@ -56,6 +64,7 @@ export type DeviceActionUiState = {
 		| "allow-secure-connection"
 		| "open-app"
 		| "confirm-open-app"
+		| "installing-app"
 		| "sign-transaction"
 		| "sign-message"
 		| "sign-typed-data"
@@ -64,6 +73,8 @@ export type DeviceActionUiState = {
 		| "error";
 	message: string;
 	error?: Error;
+	/** If true, the user can retry the failed operation. */
+	canRetry?: boolean;
 };
 
 interface LedgerContextType {
@@ -87,6 +98,16 @@ interface LedgerContextType {
 	dismissDeviceAction: () => void;
 	/** The transport currently being used to connect, if any. */
 	connectingTransport: TransportType | null;
+	/** Derived addresses available for selection after connecting. */
+	derivedAddresses: DerivedAddress[];
+	/** Whether the address picker dialog is open. */
+	showAddressPicker: boolean;
+	/** Select a derived address and finish connection. */
+	selectAddress: (address: DerivedAddress) => void;
+	/** Derive a custom address from a manual derivation path. */
+	deriveCustomAddress: (path: string) => Promise<void>;
+	/** Whether addresses are currently being derived. */
+	isDerivingAddresses: boolean;
 }
 
 const LedgerContext = createContext<LedgerContextType | null>(null);
@@ -140,6 +161,12 @@ function getRpcUrl(chainId: number): string {
 // Default derivation path (Ledger Live)
 const DEFAULT_DERIVATION_PATH = "44'/60'/0'/0/0";
 
+/**
+ * Derivation paths to present in the address picker.
+ * Mix of Ledger Live paths (44'/60'/N'/0/0) and BIP44 paths (44'/60'/0'/0/N).
+ */
+const DERIVATION_PATHS = ["44'/60'/0'/0/0", "44'/60'/1'/0/0", "44'/60'/0'/0/1", "44'/60'/2'/0/0"];
+
 // =============================================================================
 // Helper: convert Signature to hex
 // =============================================================================
@@ -159,60 +186,191 @@ function isDmkError(error: unknown): error is DmkError {
 	return typeof error === "object" && error !== null && "_tag" in error;
 }
 
-function humanizeError(error: unknown): string {
-	if (!isDmkError(error)) {
-		if (error instanceof Error) return error.message;
-		return String(error);
-	}
+/**
+ * Recursively collect all `_tag` values and APDU error codes from a DMK
+ * error and its nested causes / original errors.
+ */
+function collectErrorTags(error: unknown): { tags: string[]; codes: string[] } {
+	const tags: string[] = [];
+	const codes: string[] = [];
+	const visited = new Set<unknown>();
 
-	switch (error._tag) {
-		case "DeviceNotOnboardedError":
-			return "Please set up your Ledger device first.";
-		case "DeviceLockedError":
-			return "Your Ledger device is locked. Please unlock it.";
-		case "RefusedByUserDAError":
-			return "Action was rejected on the device.";
-		case "OpeningConnectionError":
-			return "Could not connect to the device. Make sure it's connected and unlocked.";
-		case "DeviceDisconnectedWhileSendingError":
-		case "DeviceDisconnectedBeforeSendingApdu":
-			return "Device was disconnected during the operation.";
-		case "TransportNotSupportedError":
-			return "This browser does not support the selected transport. Please try Chrome or Edge.";
-		case "NoAccessibleDeviceError":
-			return "No Ledger device found. Make sure it's connected and unlocked.";
-		case "DeviceAlreadyConnectedError":
-			return "This device is already connected.";
-		case "DeviceBusyError":
-		case "SendApduConcurrencyError":
-		case "AlreadySendingApduError":
-			return "Device is busy. Please wait and try again.";
-		case "UnsupportedFirmwareDAError":
-			return "Your device firmware is not supported. Please update your Ledger.";
-		case "UnsupportedApplicationDAError":
-			return "The Ethereum app on your device is not supported. Please update it via Ledger Live.";
-		case "UnknownDAError":
-		case "UnknownDeviceExchangeError":
-			return "An unexpected error occurred. Please reconnect your device and try again.";
-		default:
-			break;
-	}
+	function walk(e: unknown) {
+		if (!e || typeof e !== "object" || visited.has(e)) return;
+		visited.add(e);
 
-	// Check for specific APDU error codes
-	if ("errorCode" in error) {
-		const code = String((error as { errorCode: unknown }).errorCode);
-		switch (code) {
-			case "6985":
-			case "5501":
-				return "Action was cancelled on the device.";
-			case "6a80":
-				return "Blind signing is disabled. Enable it in the Ethereum app settings on your device.";
-			case "6d00":
-				return "The Ethereum app is not open on your device. Please open it.";
+		if ("_tag" in e && typeof (e as { _tag: unknown })._tag === "string") {
+			tags.push((e as { _tag: string })._tag);
+		}
+		if ("errorCode" in e) {
+			codes.push(String((e as { errorCode: unknown }).errorCode));
+		}
+		// Walk into nested error wrappers — DMK uses various field names
+		for (const key of ["cause", "originalError", "error", "err"]) {
+			if (key in e) {
+				walk((e as Record<string, unknown>)[key]);
+			}
 		}
 	}
 
-	return error.message ?? `Device error: ${error._tag}`;
+	walk(error);
+
+	// Also check the string representation for locked-device patterns
+	return { tags, codes };
+}
+
+/** Check if any string in a serialised error indicates a locked device. */
+function looksLikeLocked(error: unknown): boolean {
+	try {
+		// Stringify the full object so we catch deeply-nested fields
+		const str = typeof error === "string" ? error : JSON.stringify(error);
+		if (/locked|5515|6faa/i.test(str ?? "")) return true;
+
+		// Also check the message separately (Error instances may have
+		// non-enumerable properties that JSON.stringify misses)
+		if (error instanceof Error && /locked|5515|6faa/i.test(error.message)) return true;
+
+		return false;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Classify a DMK error into a device-action UI state if it maps to a
+ * recoverable device interaction (locked, refused, etc.), or return null
+ * if it's a generic/fatal error.
+ *
+ * This performs a deep inspection: DMK often wraps the real error inside
+ * `UnknownDAError` → `originalError` → `DeviceLockedError`.
+ */
+function classifyRecoverableError(
+	error: unknown,
+): Pick<DeviceActionUiState, "status" | "message" | "canRetry"> | null {
+	// Log the full error structure for debugging
+	console.debug("[DMK error]", error);
+
+	const { tags, codes } = collectErrorTags(error);
+
+	// --- Locked device (anywhere in the error chain) ---
+	if (tags.includes("DeviceLockedError") || codes.includes("5515") || codes.includes("6faa")) {
+		return {
+			status: "unlock-device",
+			message: "Please unlock your Ledger device",
+		};
+	}
+
+	// --- User refused (retryable) ---
+	if (tags.includes("RefusedByUserDAError") || codes.includes("6985") || codes.includes("5501")) {
+		return {
+			status: "error",
+			message: "Action was rejected on the device.",
+			canRetry: true,
+		};
+	}
+
+	// --- Device not onboarded ---
+	if (tags.includes("DeviceNotOnboardedError")) {
+		return {
+			status: "error",
+			message: "Please set up your Ledger device first.",
+		};
+	}
+
+	// --- Need to open app ---
+	if (codes.includes("6d00")) {
+		return {
+			status: "open-app",
+			message: "Please open the Ethereum app on your device.",
+		};
+	}
+
+	// --- Fallback: check serialised error string for locked keywords ---
+	if (looksLikeLocked(error)) {
+		return {
+			status: "unlock-device",
+			message: "Please unlock your Ledger device",
+		};
+	}
+
+	return null;
+}
+
+function humanizeError(error: unknown): string {
+	// Deep-inspect first — the real error may be nested
+	const { tags, codes } = collectErrorTags(error);
+
+	// --- Map well-known tags (checked in priority order) ---
+	if (tags.includes("DeviceLockedError") || codes.includes("5515") || codes.includes("6faa")) {
+		return "Your Ledger device is locked. Please unlock it.";
+	}
+	if (tags.includes("RefusedByUserDAError") || codes.includes("6985") || codes.includes("5501")) {
+		return "Action was rejected on the device.";
+	}
+	if (tags.includes("DeviceNotOnboardedError")) {
+		return "Please set up your Ledger device first.";
+	}
+	if (tags.includes("OpeningConnectionError") || tags.includes("OpenAppDeviceActionError")) {
+		return "Could not connect to the device. Make sure it's connected and unlocked.";
+	}
+	if (
+		tags.includes("DeviceDisconnectedWhileSendingError") ||
+		tags.includes("DeviceDisconnectedBeforeSendingApdu")
+	) {
+		return "Device was disconnected during the operation.";
+	}
+	if (tags.includes("TransportNotSupportedError")) {
+		return "This browser does not support the selected transport. Please try Chrome or Edge.";
+	}
+	if (tags.includes("NoAccessibleDeviceError")) {
+		return "No Ledger device found. Make sure it's connected and unlocked.";
+	}
+	if (tags.includes("DeviceAlreadyConnectedError")) {
+		return "This device is already connected.";
+	}
+	if (
+		tags.includes("DeviceBusyError") ||
+		tags.includes("SendApduConcurrencyError") ||
+		tags.includes("AlreadySendingApduError")
+	) {
+		return "Device is busy. Please wait and try again.";
+	}
+	if (tags.includes("UnsupportedFirmwareDAError")) {
+		return "Your device firmware is not supported. Please update your Ledger.";
+	}
+	if (tags.includes("UnsupportedApplicationDAError")) {
+		return "The Ethereum app on your device is not supported. Please update it via Ledger Live.";
+	}
+	if (tags.includes("OutOfMemoryDAError")) {
+		return "Not enough storage on your device. Please free up space via Ledger Live.";
+	}
+	if (tags.includes("UnsupportedFirmwareDAError")) {
+		return "Your device firmware is out of date. Please update via Ledger Live.";
+	}
+
+	// --- APDU error codes ---
+	if (codes.includes("6a80")) {
+		return "Blind signing is disabled. Enable it in the Ethereum app settings on your device.";
+	}
+	if (codes.includes("6d00")) {
+		return "The Ethereum app is not open on your device. Please open it.";
+	}
+
+	// --- Fallback: check serialised string for locked keywords ---
+	if (looksLikeLocked(error)) {
+		return "Your Ledger device is locked. Please unlock it.";
+	}
+
+	// --- Generic fallback ---
+	if (isDmkError(error)) {
+		if (tags.includes("UnknownDAError") || tags.includes("UnknownDeviceExchangeError")) {
+			return "An unexpected error occurred. Please reconnect your device and try again.";
+		}
+		return error.message ?? `Device error: ${error._tag}`;
+	}
+
+	if (error instanceof Error) return error.message;
+	return String(error);
 }
 
 // =============================================================================
@@ -252,6 +410,9 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 	const [showConnectDialog, setShowConnectDialog] = useState(false);
 	const [deviceModelId, setDeviceModelId] = useState<DeviceModelId | null>(null);
 	const [connectingTransport, setConnectingTransport] = useState<TransportType | null>(null);
+	const [derivedAddresses, setDerivedAddresses] = useState<DerivedAddress[]>([]);
+	const [showAddressPicker, setShowAddressPicker] = useState(false);
+	const [isDerivingAddresses, setIsDerivingAddresses] = useState(false);
 
 	const sessionIdRef = useRef<DeviceSessionId | null>(null);
 	const derivationPathRef = useRef<string>(DEFAULT_DERIVATION_PATH);
@@ -283,6 +444,13 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 						status: "error",
 						message: "Device disconnected. Please reconnect your Ledger.",
 						error: new Error("Device disconnected"),
+					});
+				} else if (state.deviceStatus === DeviceStatus.LOCKED) {
+					// Device was locked while connected — surface unlock UI
+					setDeviceActionState({
+						status: "unlock-device",
+						message: "Please unlock your Ledger device",
+						canRetry: true,
 					});
 				}
 			},
@@ -326,11 +494,9 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				);
 				await dmk.stopDiscovering();
 
-				// Connect to device
-				const sessionId = await dmk.connect({
-					device,
-					sessionRefresherOptions: { isRefresherDisabled: true },
-				});
+				// Connect to device — session refresher enabled so DMK can
+				// detect locked/unlocked state and surface it in device actions.
+				const sessionId = await dmk.connect({ device });
 
 				sessionIdRef.current = sessionId;
 
@@ -344,41 +510,162 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					// Non-fatal: animations will fall back to generic
 				}
 
-				// Close the connect dialog — from here, DeviceActionDialog
-				// takes over for device interactions (unlock, open app, etc.)
-				setShowConnectDialog(false);
-				setConnectingTransport(null);
+				// ---------------------------------------------------------------
+				// Wait for the session to initialise so the DMK can detect
+				// whether the device is locked. With the session refresher
+				// enabled, the DMK polls the device and advances the
+				// session state from "Connected" → "Ready…".
+				//
+				// We wait up to 10 s for either:
+				//  • a LOCKED deviceStatus  → show the unlock Lottie
+				//  • a Ready* sessionState  → device is unlocked and ready
+				//  • timeout                → proceed optimistically
+				// ---------------------------------------------------------------
+				let deviceLocked = false;
 
-				// Derive address — use observeDeviceAction so that device
-				// interactions (unlock, open Ethereum app, etc.) are displayed
-				const ethSigner = buildEthSigner(dmk, sessionId);
+				try {
+					const settled = await firstValueFrom(
+						dmk.getDeviceSessionState({ sessionId }).pipe(
+							filter(
+								(s) =>
+									s.deviceStatus === DeviceStatus.LOCKED ||
+									s.sessionStateType !== DeviceSessionStateType.Connected,
+							),
+							timeout(10_000),
+						),
+					);
 
-				const { observable: addressObservable } = ethSigner.getAddress(derivationPathRef.current, {
-					checkOnDevice: false,
-					skipOpenApp: false,
+					if (settled.deviceStatus === DeviceStatus.LOCKED) {
+						deviceLocked = true;
+					}
+				} catch {
+					// Timeout — proceed optimistically (getAddress will handle it)
+				}
+
+				if (deviceLocked) {
+					// Close the connect dialog so DeviceActionDialog is visible
+					setShowConnectDialog(false);
+					setConnectingTransport(null);
+
+					// Show the unlock Lottie
+					setDeviceActionState({
+						status: "unlock-device",
+						message: "Please unlock your Ledger device",
+					});
+
+					// Wait for the device to become unlocked (up to 2 min)
+					try {
+						await firstValueFrom(
+							dmk.getDeviceSessionState({ sessionId }).pipe(
+								filter((s) => s.deviceStatus !== DeviceStatus.LOCKED),
+								timeout(120_000),
+							),
+						);
+					} catch {
+						// Timed out waiting for unlock — fall through and let getAddress handle it
+					}
+
+					// Device unlocked (or timed out) — clear the unlock UI
+					// and re-open the connect dialog so the deriving loader shows
+					setDeviceActionState(null);
+					setShowConnectDialog(true);
+				}
+
+				// ---------------------------------------------------------------
+				// Ensure the Ethereum app is installed and opened.
+				//
+				// We use OpenAppWithDependenciesDeviceAction which will:
+				//  1. Check if the Ethereum app is installed
+				//  2. Install it (over secure channel) if missing
+				//  3. Open the app
+				//
+				// This surfaces device interactions (unlock, confirm open,
+				// allow secure connection, install progress) via the observable.
+				//
+				// Keep connectingTransport set until this completes so the
+				// ConnectDeviceDialog stays on the "Waiting for device" view
+				// rather than flashing back to the transport selector.
+				// ---------------------------------------------------------------
+				const openAppAction = new OpenAppWithDependenciesDeviceAction({
+					input: {
+						application: { name: "Ethereum" },
+						dependencies: [],
+					},
 				});
 
-				const addressResult = await observeDeviceAction(addressObservable, "Address derivation");
-				setAccount(addressResult.address);
+				const { observable: openAppObservable } = dmk.executeDeviceAction({
+					sessionId,
+					deviceAction: openAppAction,
+				});
+
+				await observeDeviceAction(openAppObservable, "Ethereum app setup");
+
+				// Ethereum app is installed and open — transition from the
+				// "waiting" view straight to the "deriving addresses" view
+				// without any gap that would flash the transport selector.
+				setConnectingTransport(null);
+				setDeviceActionState(null);
+				setIsDerivingAddresses(true);
+
+				// Derive all addresses with skipOpenApp: true since the app
+				// is already open after OpenAppWithDependencies.
+				const ethSigner = buildEthSigner(dmk, sessionId);
+
+				const addresses: DerivedAddress[] = [];
+
+				for (const derivPath of DERIVATION_PATHS) {
+					if (!derivPath) continue;
+					try {
+						const { observable } = ethSigner.getAddress(derivPath, {
+							checkOnDevice: false,
+							skipOpenApp: true,
+						});
+						const result = await lastValueFrom(observable);
+						if (result.status === DeviceActionStatus.Completed) {
+							addresses.push({
+								address: result.output.address,
+								derivationPath: derivPath,
+							});
+						}
+					} catch {
+						// Skip addresses that fail to derive
+					}
+				}
+
+				// All addresses derived — close the connect dialog and open
+				// the address picker in one batch
+				setIsDerivingAddresses(false);
+				setShowConnectDialog(false);
+				setDerivedAddresses(addresses);
+				setShowAddressPicker(true);
 
 				// Start monitoring the session for disconnects
 				monitorSession(sessionId);
-
-				setDeviceActionState({
-					status: "success",
-					message: "Connected successfully",
-				});
-				setTimeout(() => setDeviceActionState(null), 1500);
 			} catch (err) {
-				const message = humanizeError(err);
-				const errorObj = new Error(message);
-				setError(errorObj);
 				setConnectingTransport(null);
-				setDeviceActionState({
-					status: "error",
-					message,
-					error: errorObj,
-				});
+				setIsDerivingAddresses(false);
+				setShowConnectDialog(false);
+
+				// Check if this is a recoverable device error (locked, refused, etc.)
+				const recoverable = classifyRecoverableError(err);
+				if (recoverable) {
+					setDeviceActionState({
+						...recoverable,
+						canRetry:
+							recoverable.canRetry === true ||
+							recoverable.status === "unlock-device" ||
+							recoverable.status === "open-app",
+					});
+				} else {
+					const message = humanizeError(err);
+					const errorObj = new Error(message);
+					setError(errorObj);
+					setDeviceActionState({
+						status: "error",
+						message,
+						error: errorObj,
+					});
+				}
 			} finally {
 				setIsConnecting(false);
 				try {
@@ -411,6 +698,55 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 		setError(null);
 		setDeviceActionState(null);
 		setConnectingTransport(null);
+		setDerivedAddresses([]);
+		setShowAddressPicker(false);
+	}, []);
+
+	// -----------------------------------------------------------------------
+	// Select a derived address from the picker
+	// -----------------------------------------------------------------------
+	const selectAddress = useCallback((derived: DerivedAddress) => {
+		derivationPathRef.current = derived.derivationPath;
+		setAccount(derived.address);
+		setShowAddressPicker(false);
+		setDerivedAddresses([]);
+		setDeviceActionState(null);
+	}, []);
+
+	// -----------------------------------------------------------------------
+	// Derive a custom address from a manually entered path
+	// -----------------------------------------------------------------------
+	const deriveCustomAddress = useCallback(async (path: string) => {
+		const sessionId = sessionIdRef.current;
+		if (!sessionId) {
+			throw new Error("No device connected.");
+		}
+		const dmk = getDmk();
+		const ethSigner = buildEthSigner(dmk, sessionId);
+
+		setIsDerivingAddresses(true);
+		try {
+			const { observable } = ethSigner.getAddress(path, {
+				checkOnDevice: false,
+				skipOpenApp: true,
+			});
+			const result = await lastValueFrom(observable);
+			if (result.status === DeviceActionStatus.Completed) {
+				const newAddr: DerivedAddress = {
+					address: result.output.address,
+					derivationPath: path,
+				};
+				// Add to the front of the list if not already present
+				setDerivedAddresses((prev) => {
+					const exists = prev.some((a) => a.derivationPath === path);
+					return exists ? prev : [newAddr, ...prev];
+				});
+			} else {
+				throw new Error("Failed to derive address for this path.");
+			}
+		} finally {
+			setIsDerivingAddresses(false);
+		}
 	}, []);
 
 	// -----------------------------------------------------------------------
@@ -448,6 +784,22 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 						switch (state.status) {
 							case DeviceActionStatus.Pending: {
 								const interaction = state.intermediateValue?.requiredUserInteraction;
+
+								// Check for install plan progress (from OpenAppWithDependencies)
+								const installPlan = (
+									state.intermediateValue as
+										| { installPlan?: { currentIndex: number; installPlan: unknown[] } }
+										| undefined
+								)?.installPlan;
+
+								if (installPlan && installPlan.installPlan.length > 0) {
+									setDeviceActionState({
+										status: "installing-app",
+										message: `Installing app${installPlan.installPlan.length > 1 ? ` (${installPlan.currentIndex + 1}/${installPlan.installPlan.length})` : ""}…`,
+									});
+									break;
+								}
+
 								switch (interaction) {
 									case UserInteractionRequired.UnlockDevice:
 										setDeviceActionState({
@@ -465,6 +817,12 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 										setDeviceActionState({
 											status: "confirm-open-app",
 											message: "Please confirm opening the Ethereum app on your device",
+										});
+										break;
+									case UserInteractionRequired.AllowListApps:
+										setDeviceActionState({
+											status: "allow-secure-connection",
+											message: "Please allow the request on your device",
 										});
 										break;
 									case UserInteractionRequired.SignTransaction:
@@ -512,15 +870,25 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 								resolve(state.output);
 								break;
 							case DeviceActionStatus.Error: {
-								const message = humanizeError(state.error);
-								const errorObj = new Error(message);
-								setDeviceActionState({
-									status: "error",
-									message,
-									error: errorObj,
-								});
+								const recoverable = classifyRecoverableError(state.error);
+								if (recoverable) {
+									setDeviceActionState({
+										...recoverable,
+										canRetry:
+											recoverable.canRetry === true ||
+											recoverable.status === "unlock-device" ||
+											recoverable.status === "open-app",
+									});
+								} else {
+									const message = humanizeError(state.error);
+									setDeviceActionState({
+										status: "error",
+										message,
+										error: new Error(message),
+									});
+								}
 								subscription.unsubscribe();
-								reject(errorObj);
+								reject(state.error);
 								break;
 							}
 							case DeviceActionStatus.Stopped:
@@ -530,14 +898,24 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 						}
 					},
 					error: (err) => {
-						const message = humanizeError(err);
-						const errorObj = new Error(message);
-						setDeviceActionState({
-							status: "error",
-							message,
-							error: errorObj,
-						});
-						reject(errorObj);
+						const recoverable = classifyRecoverableError(err);
+						if (recoverable) {
+							setDeviceActionState({
+								...recoverable,
+								canRetry:
+									recoverable.canRetry === true ||
+									recoverable.status === "unlock-device" ||
+									recoverable.status === "open-app",
+							});
+						} else {
+							const message = humanizeError(err);
+							setDeviceActionState({
+								status: "error",
+								message,
+								error: new Error(message),
+							});
+						}
+						reject(err);
 					},
 				});
 			});
@@ -761,6 +1139,11 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			deviceModelId,
 			dismissDeviceAction,
 			connectingTransport,
+			derivedAddresses,
+			showAddressPicker,
+			selectAddress,
+			deriveCustomAddress,
+			isDerivingAddresses,
 		}),
 		[
 			account,
@@ -778,6 +1161,11 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			deviceModelId,
 			dismissDeviceAction,
 			connectingTransport,
+			derivedAddresses,
+			showAddressPicker,
+			selectAddress,
+			deriveCustomAddress,
+			isDerivingAddresses,
 		],
 	);
 

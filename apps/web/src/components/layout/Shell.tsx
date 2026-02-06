@@ -9,6 +9,11 @@ interface ShellProps {
 export function Shell({ children }: ShellProps) {
 	return (
 		<div className="flex min-h-screen flex-col bg-canvas text-base">
+			{/* Hackathon disclaimer banner */}
+			<div className="w-full bg-warning px-16 py-8 text-center body-3 text-on-warning">
+				This is a Hackathon project vibe coded — this is not a production-ready project.
+			</div>
+
 			{/* Header */}
 			<Header />
 
@@ -19,9 +24,7 @@ export function Shell({ children }: ShellProps) {
 
 			{/* Main content - offset for left navbar, centered */}
 			<main className="ml-[100px] flex-1 py-48 px-32">
-				<div className="mx-auto max-w-[1200px]">
-					{children}
-				</div>
+				<div className="mx-auto max-w-[1200px]">{children}</div>
 			</main>
 		</div>
 	);

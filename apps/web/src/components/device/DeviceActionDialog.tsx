@@ -6,89 +6,14 @@ import {
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
+	Spot,
 } from "@ledgerhq/lumen-ui-react";
+import { LedgerLogo, Usb } from "@ledgerhq/lumen-ui-react/symbols";
+import * as RadixDialog from "@radix-ui/react-dialog";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import Lottie from "lottie-react";
 import { useMemo } from "react";
-import { type AnimationKey, type DeviceModel, getDeviceAnimation } from "./animations";
-
-// =============================================================================
-// Icons
-// =============================================================================
-
-function CheckIcon({ className }: { className?: string }) {
-	return (
-		<svg
-			className={className}
-			xmlns="http://www.w3.org/2000/svg"
-			fill="none"
-			viewBox="0 0 24 24"
-			strokeWidth="2"
-			stroke="currentColor"
-			role="img"
-			aria-label="Success"
-		>
-			<path
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-			/>
-		</svg>
-	);
-}
-
-function AlertIcon({ className }: { className?: string }) {
-	return (
-		<svg
-			className={className}
-			xmlns="http://www.w3.org/2000/svg"
-			fill="none"
-			viewBox="0 0 24 24"
-			strokeWidth="2"
-			stroke="currentColor"
-			role="img"
-			aria-label="Error"
-		>
-			<path
-				strokeLinecap="round"
-				strokeLinejoin="round"
-				d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
-			/>
-		</svg>
-	);
-}
-
-function LedgerLogoIcon({ className }: { className?: string }) {
-	return (
-		<svg
-			className={className}
-			viewBox="0 0 24 24"
-			fill="none"
-			xmlns="http://www.w3.org/2000/svg"
-			role="img"
-			aria-label="Ledger"
-		>
-			<path
-				d="M3 14.4V21h6.6v-1.2H4.2v-5.4H3ZM14.4 3H21v6.6h-1.2V4.2h-5.4V3ZM3 3h6.6v1.2H4.2v5.4H3V3Zm11.4 16.8V21H21v-6.6h-1.2v5.4h-5.4Z"
-				fill="currentColor"
-			/>
-		</svg>
-	);
-}
-
-function UsbIcon({ className }: { className?: string }) {
-	return (
-		<svg
-			className={className}
-			viewBox="0 0 24 24"
-			fill="currentColor"
-			xmlns="http://www.w3.org/2000/svg"
-			role="img"
-			aria-label="USB"
-		>
-			<path d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07A1.993 1.993 0 0 0 8 7a2 2 0 0 0-4 0c0 .74.4 1.39 1 1.73V13a2 2 0 0 0 2 2h3v2.27c-.6.34-1 .99-1 1.73a2 2 0 0 0 4 0c0-.74-.4-1.39-1-1.73V15h3a2 2 0 0 0 2-2v-2h1V7h-3Z" />
-		</svg>
-	);
-}
+import { type AnimationKey, getDeviceAnimation } from "./animations";
 
 // =============================================================================
 // Map UI state → animation key
@@ -140,6 +65,12 @@ function getStatusConfig(status: DeviceActionUiState["status"]): StatusConfig {
 				subtitle: "Follow the instructions displayed on your Secure Touchscreen.",
 				useUsbIcon: true,
 			};
+		case "installing-app":
+			return {
+				title: "Installing Ethereum app",
+				subtitle: "Please wait while the app is being installed on your device.",
+				useUsbIcon: true,
+			};
 		case "sign-transaction":
 			return {
 				title: "Continue on your Ledger",
@@ -172,16 +103,14 @@ function getStatusConfig(status: DeviceActionUiState["status"]): StatusConfig {
 // =============================================================================
 
 export function DeviceActionDialog() {
-	const { deviceActionState, deviceModelId, dismissDeviceAction } = useLedger();
-
-	const deviceModel: DeviceModel = (deviceModelId as DeviceModel) ?? "generic";
+	const { deviceActionState, deviceModelId, dismissDeviceAction, connect } = useLedger();
 
 	const animationData = useMemo(() => {
 		if (!deviceActionState) return null;
 		const key = getAnimationKey(deviceActionState.status);
 		if (!key) return null;
-		return getDeviceAnimation(deviceModel, key);
-	}, [deviceActionState, deviceModel]);
+		return getDeviceAnimation(deviceModelId, key);
+	}, [deviceActionState, deviceModelId]);
 
 	if (!deviceActionState) return null;
 
@@ -189,7 +118,10 @@ export function DeviceActionDialog() {
 	const isError = deviceActionState.status === "error";
 	const isSuccess = deviceActionState.status === "success";
 	const isOpenApp =
-		deviceActionState.status === "open-app" || deviceActionState.status === "confirm-open-app";
+		deviceActionState.status === "open-app" ||
+		deviceActionState.status === "confirm-open-app" ||
+		deviceActionState.status === "installing-app";
+	const canRetry = deviceActionState.canRetry === true;
 
 	// -------------------------------------------------------------------------
 	// "Open Ethereum app" layout — matches the Ledger reference design
@@ -202,18 +134,23 @@ export function DeviceActionDialog() {
 					/* managed programmatically */
 				}}
 			>
-				<DialogContent>
+				<DialogContent aria-describedby={undefined}>
+					{/* Visually-hidden Radix title — satisfies accessibility requirement */}
+					<VisuallyHidden.Root asChild>
+						<RadixDialog.Title>{config.title}</RadixDialog.Title>
+					</VisuallyHidden.Root>
+
 					{/* Minimal header with just the Ledger logo */}
 					<div className="p-16">
-						<LedgerLogoIcon className="size-24 text-base" />
+						<LedgerLogo size={24} className="text-base" />
 					</div>
 					<DialogBody>
 						<div className="flex flex-col items-center gap-16 py-24">
-							<div className="flex size-64 items-center justify-center rounded-full bg-base">
-								<div className="flex size-40 items-center justify-center rounded-full bg-canvas">
-									<UsbIcon className="size-20 text-base" />
-								</div>
-							</div>
+							{deviceActionState.status === "installing-app" ? (
+								<Spot appearance="loader" size={56} />
+							) : (
+								<Spot appearance="icon" icon={Usb} size={56} />
+							)}
 							<p className="heading-4 text-center text-base">{config.title}</p>
 							<p className="body-2 text-muted text-center">{config.subtitle}</p>
 						</div>
@@ -233,7 +170,12 @@ export function DeviceActionDialog() {
 				/* managed programmatically */
 			}}
 		>
-			<DialogContent>
+			<DialogContent aria-describedby={undefined}>
+				{/* Visually-hidden Radix title — satisfies accessibility requirement */}
+				<VisuallyHidden.Root asChild>
+					<RadixDialog.Title>{config.title}</RadixDialog.Title>
+				</VisuallyHidden.Root>
+
 				<DialogHeader
 					appearance="compact"
 					title={config.title}
@@ -241,9 +183,13 @@ export function DeviceActionDialog() {
 				/>
 				<DialogBody>
 					<div className="flex flex-col items-center gap-16 py-24">
-						{/* Lottie animation or fallback icon */}
+						{/* Lottie animation or fallback icon.
+					   The Lottie files are dark-theme assets (white/light outlines
+					   on transparent bg). In dark mode they render naturally on the
+					   dark dialog surface. In light mode we apply CSS invert() so
+					   the outlines become dark on the light dialog background. */}
 						{animationData ? (
-							<div className="w-[200px] h-[200px] flex items-center justify-center">
+							<div className="w-[200px] h-[200px] flex items-center justify-center dark:invert-0 invert">
 								<Lottie
 									animationData={animationData}
 									loop
@@ -252,17 +198,11 @@ export function DeviceActionDialog() {
 								/>
 							</div>
 						) : isSuccess ? (
-							<div className="flex items-center justify-center size-64 rounded-full bg-success/10">
-								<CheckIcon className="size-32 text-success" />
-							</div>
+							<Spot appearance="check" size={56} />
 						) : isError ? (
-							<div className="flex items-center justify-center size-64 rounded-full bg-error/10">
-								<AlertIcon className="size-32 text-error" />
-							</div>
+							<Spot appearance="error" size={56} />
 						) : (
-							<div className="flex items-center justify-center size-64">
-								<div className="size-40 border-4 border-muted border-t-interactive rounded-full animate-spin" />
-							</div>
+							<Spot appearance="loader" size={56} />
 						)}
 
 						{/* Title below animation for device-interaction states */}
@@ -279,12 +219,26 @@ export function DeviceActionDialog() {
 					</div>
 				</DialogBody>
 
-				{/* Allow dismissing error state */}
-				{isError && (
+				{/* Footer: retry for recoverable states, close for errors */}
+				{(isError || canRetry) && (
 					<DialogFooter>
-						<Button appearance="transparent" size="md" onClick={dismissDeviceAction}>
-							Close
-						</Button>
+						<div className="flex items-center gap-8">
+							<Button appearance="transparent" size="md" onClick={dismissDeviceAction}>
+								Close
+							</Button>
+							{canRetry && (
+								<Button
+									appearance="accent"
+									size="md"
+									onClick={() => {
+										dismissDeviceAction();
+										connect();
+									}}
+								>
+									Retry
+								</Button>
+							)}
+						</div>
 					</DialogFooter>
 				)}
 			</DialogContent>
