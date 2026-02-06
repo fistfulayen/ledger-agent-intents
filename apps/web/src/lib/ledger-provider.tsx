@@ -1143,7 +1143,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				const { observable: signObservable } = ethSigner.signTransaction(
 					derivationPathRef.current,
 					txBytes,
-					{ skipOpenApp: false },
+					{ skipOpenApp: true },
 				);
 
 				const signature = await observeDeviceAction(signObservable, "Transaction");
@@ -1209,7 +1209,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				const { observable: signObservable } = ethSigner.signTypedData(
 					derivationPathRef.current,
 					parsed,
-					{ skipOpenApp: false },
+					{ skipOpenApp: true },
 				);
 
 				const signature = await observeDeviceAction(signObservable, "Typed data signing");
@@ -1248,7 +1248,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				const { observable: signObservable } = ethSigner.signMessage(
 					derivationPathRef.current,
 					message,
-					{ skipOpenApp: false },
+					{ skipOpenApp: true },
 				);
 
 				const signature = await observeDeviceAction(signObservable, "Message signing");
