@@ -8,6 +8,7 @@ import {
 	buildAgentCredentialFile,
 	downloadAgentCredential,
 	buildAuthorizationMessage,
+	buildRevocationMessage,
 	type AgentKeyMaterial,
 } from "@/lib/agent-keys";
 import { privateKeyToAccount } from "viem/accounts";
@@ -429,18 +430,38 @@ function AgentList({ agents }: { agents: TrustchainMember[] }) {
 }
 
 function AgentRow({ agent }: { agent: TrustchainMember }) {
+	const { personalSign } = useLedger();
 	const revokeAgent = useRevokeAgent();
 	const isRevoked = agent.revokedAt !== null;
 	const [confirming, setConfirming] = useState(false);
+	const [signing, setSigning] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 
 	const handleRevoke = useCallback(async () => {
 		if (!confirming) {
 			setConfirming(true);
 			return;
 		}
-		await revokeAgent.mutateAsync(agent.id);
-		setConfirming(false);
-	}, [confirming, agent.id, revokeAgent]);
+
+		setError(null);
+		setSigning(true);
+		try {
+			const message = buildRevocationMessage({
+				agentId: agent.id,
+				agentPublicKey: agent.memberPubkey,
+				trustchainId: agent.trustchainId,
+			});
+			const signature = await personalSign(message);
+			await revokeAgent.mutateAsync({ id: agent.id, signature });
+			setConfirming(false);
+		} catch (err) {
+			const errMessage = err instanceof Error ? err.message : "Failed to revoke agent";
+			setError(errMessage);
+			setConfirming(false);
+		} finally {
+			setSigning(false);
+		}
+	}, [confirming, agent.id, agent.memberPubkey, agent.trustchainId, revokeAgent, personalSign]);
 
 	return (
 		<div
@@ -473,18 +494,27 @@ function AgentRow({ agent }: { agent: TrustchainMember }) {
 			</div>
 
 			{!isRevoked && (
-				<Button
-					appearance={confirming ? "red" : "gray"}
-					size="sm"
-					onClick={handleRevoke}
-					disabled={revokeAgent.isPending}
-				>
-					{revokeAgent.isPending
-						? "Revoking..."
-						: confirming
-							? "Confirm Revoke"
-							: "Revoke"}
-				</Button>
+				<div className="flex items-center gap-8">
+					{error && (
+						<span className="body-3 text-error max-w-192 truncate" title={error}>
+							{error}
+						</span>
+					)}
+					<Button
+						appearance={confirming ? "red" : "gray"}
+						size="sm"
+						onClick={handleRevoke}
+						disabled={signing || revokeAgent.isPending}
+					>
+						{signing
+							? "Sign on Ledger…"
+							: revokeAgent.isPending
+								? "Revoking..."
+								: confirming
+									? "Confirm Revoke"
+									: "Revoke"}
+					</Button>
+				</div>
 			)}
 		</div>
 	);

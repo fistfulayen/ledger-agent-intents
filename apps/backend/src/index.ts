@@ -386,10 +386,15 @@ app.get("/api/agents/:id", (req, res) => {
 });
 
 // Revoke agent (POST /api/agents/revoke – preferred, avoids Vercel dynamic-route issues)
+// Requires a Ledger-signed revocation message (signature field in body).
 app.post("/api/agents/revoke", (req, res) => {
-	const { id } = req.body as { id?: string };
+	const { id, signature } = req.body as { id?: string; signature?: string };
 	if (!id) {
 		res.status(400).json({ success: false, error: "Missing agent ID in request body" });
+		return;
+	}
+	if (!signature) {
+		res.status(400).json({ success: false, error: "Missing signature in request body" });
 		return;
 	}
 	const member = agents.get(id);
@@ -397,6 +402,8 @@ app.post("/api/agents/revoke", (req, res) => {
 		res.status(404).json({ success: false, error: "Agent not found or already revoked" });
 		return;
 	}
+	// NOTE: In-memory dev backend skips actual signature verification.
+	// The Vercel serverless function (apps/web/api/agents/revoke.ts) does full verification.
 	member.revokedAt = new Date().toISOString();
 	console.log(`[Agent Revoked] ${member.id} "${member.label}"`);
 	res.json({ success: true, member });

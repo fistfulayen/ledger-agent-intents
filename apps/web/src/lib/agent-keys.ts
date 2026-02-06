@@ -127,6 +127,24 @@ export function buildAuthorizationMessage(params: {
 	].join("\n");
 }
 
+/**
+ * Build the EIP-191 message the user signs on their Ledger device to
+ * revoke an agent key.  Both frontend and backend MUST use this
+ * exact format so the recovered address matches.
+ */
+export function buildRevocationMessage(params: {
+	agentId: string;
+	agentPublicKey: string;
+	trustchainId: string;
+}): string {
+	return [
+		"Revoke agent key for Ledger Agent Payments",
+		`Agent ID: ${params.agentId}`,
+		`Key: ${params.agentPublicKey}`,
+		`Identity: ${params.trustchainId}`,
+	].join("\n");
+}
+
 // =============================================================================
 // Agent Request Signing (used by the agent to authenticate API calls)
 // =============================================================================

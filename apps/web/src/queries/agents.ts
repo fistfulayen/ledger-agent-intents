@@ -68,18 +68,20 @@ export function useRegisterAgent() {
  * Revoke an agent.
  * Uses POST /api/agents/revoke instead of DELETE /api/agents/:id to avoid
  * Vercel routing issues with DELETE on dynamic routes.
+ *
+ * Requires a Ledger-signed revocation message (EIP-191 personal_sign).
  */
 export function useRevokeAgent() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: async (id: string): Promise<TrustchainMember> => {
+		mutationFn: async (params: { id: string; signature: string }): Promise<TrustchainMember> => {
 			const data = await fetchJson<{ success: boolean; member: TrustchainMember }>(
 				`${API_BASE}/api/agents/revoke`,
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ id }),
+					body: JSON.stringify({ id: params.id, signature: params.signature }),
 				},
 			);
 			return data.member;

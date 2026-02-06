@@ -104,6 +104,7 @@ export const verifyBodySchema = z.object({
 /** Revoke agent body for POST /api/agents/revoke */
 export const revokeAgentBodySchema = z.object({
 	id: z.string().uuid("Invalid agent ID"),
+	signature: z.string().min(1, "signature is required"),
 });
 
 export type CreateIntentRequestInput = z.infer<typeof createIntentRequestSchema>;

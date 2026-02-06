@@ -271,13 +271,21 @@ describe("verifyBodySchema", () => {
 // =============================================================================
 
 describe("revokeAgentBodySchema", () => {
-	it("accepts valid UUID", () => {
-		const result = revokeAgentBodySchema.safeParse({ id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890" });
+	it("accepts valid UUID with signature", () => {
+		const result = revokeAgentBodySchema.safeParse({
+			id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+			signature: "0xabc123",
+		});
 		expect(result.success).toBe(true);
 	});
 
 	it("rejects non-UUID string", () => {
-		const result = revokeAgentBodySchema.safeParse({ id: "not-a-uuid" });
+		const result = revokeAgentBodySchema.safeParse({ id: "not-a-uuid", signature: "0xabc" });
+		expect(result.success).toBe(false);
+	});
+
+	it("rejects missing signature", () => {
+		const result = revokeAgentBodySchema.safeParse({ id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890" });
 		expect(result.success).toBe(false);
 	});
 });
