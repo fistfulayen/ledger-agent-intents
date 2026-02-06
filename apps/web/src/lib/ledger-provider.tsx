@@ -572,48 +572,75 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				}
 
 				// ---------------------------------------------------------------
-				// Ensure the Ethereum app is installed and opened.
+				// Ensure the Ethereum app is open, then derive addresses.
 				//
-				// We use OpenAppWithDependenciesDeviceAction which will:
-				//  1. Check if the Ethereum app is installed
-				//  2. Install it (over secure channel) if missing
-				//  3. Open the app
-				//
-				// This surfaces device interactions (unlock, confirm open,
-				// allow secure connection, install progress) via the observable.
+				// Strategy: try to derive the first address with skipOpenApp.
+				// If it succeeds, the Ethereum app is already running and we
+				// avoid the unnecessary dashboard round-trip.
+				// If it fails, we use OpenAppWithDependenciesDeviceAction to
+				// open (or install) the app, then derive again.
 				//
 				// Keep connectingTransport set until this completes so the
 				// ConnectDeviceDialog stays on the "Waiting for device" view
 				// rather than flashing back to the transport selector.
 				// ---------------------------------------------------------------
-				const openAppAction = new OpenAppWithDependenciesDeviceAction({
-					input: {
-						application: { name: "Ethereum" },
-						dependencies: [],
-					},
-				});
+				const ethSigner = buildEthSigner(dmk, sessionId);
+				const addresses: DerivedAddress[] = [];
 
-				const { observable: openAppObservable } = dmk.executeDeviceAction({
-					sessionId,
-					deviceAction: openAppAction,
-				});
+				// Try deriving the first address silently (skipOpenApp = true).
+				// If the Ethereum app is open this succeeds immediately.
+				let ethAppReady = false;
+				const firstPath = DERIVATION_PATHS[0];
 
-				await observeDeviceAction(openAppObservable, "Ethereum app setup");
+				if (firstPath) {
+					try {
+						const { observable } = ethSigner.getAddress(firstPath, {
+							checkOnDevice: false,
+							skipOpenApp: true,
+						});
+						const result = await lastValueFrom(observable);
+						if (result.status === DeviceActionStatus.Completed) {
+							addresses.push({
+								address: result.output.address,
+								derivationPath: firstPath,
+							});
+							ethAppReady = true;
+						}
+					} catch {
+						// Ethereum app is not open — we'll open it below
+					}
+				}
 
-				// Ethereum app is installed and open — transition from the
-				// "waiting" view straight to the "deriving addresses" view
-				// without any gap that would flash the transport selector.
+				if (!ethAppReady) {
+					// Ethereum app is not open. Use the full device action
+					// which handles close → install → open and properly waits
+					// for user confirmation on the device.
+					const openAppAction = new OpenAppWithDependenciesDeviceAction({
+						input: {
+							application: { name: "Ethereum" },
+							dependencies: [],
+						},
+					});
+
+					const { observable: openAppObservable } = dmk.executeDeviceAction({
+						sessionId,
+						deviceAction: openAppAction,
+					});
+
+					await observeDeviceAction(openAppObservable, "Ethereum app setup");
+				}
+
+				// Ethereum app is open — transition from the "waiting" view
+				// straight to the "deriving addresses" view without any gap
+				// that would flash the transport selector.
 				setConnectingTransport(null);
 				setDeviceActionState(null);
 				setIsDerivingAddresses(true);
 
-				// Derive all addresses with skipOpenApp: true since the app
-				// is already open after OpenAppWithDependencies.
-				const ethSigner = buildEthSigner(dmk, sessionId);
+				// Derive remaining addresses (first one may already be done)
+				const remainingPaths = ethAppReady ? DERIVATION_PATHS.slice(1) : DERIVATION_PATHS;
 
-				const addresses: DerivedAddress[] = [];
-
-				for (const derivPath of DERIVATION_PATHS) {
+				for (const derivPath of remainingPaths) {
 					if (!derivPath) continue;
 					try {
 						const { observable } = ethSigner.getAddress(derivPath, {

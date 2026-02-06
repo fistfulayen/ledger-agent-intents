@@ -10,7 +10,7 @@ export function Shell({ children }: ShellProps) {
 	return (
 		<div className="flex min-h-screen flex-col bg-canvas text-base">
 			{/* Hackathon disclaimer banner */}
-			<div className="w-full bg-warning px-16 py-8 text-center body-3 text-on-warning">
+			<div className="w-full bg-black text-white dark:bg-white dark:text-black px-16 py-8 text-center body-3">
 				This is a Hackathon project vibe coded — this is not a production-ready project.
 			</div>
 
