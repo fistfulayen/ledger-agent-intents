@@ -108,8 +108,8 @@ interface LedgerContextType {
 	deriveCustomAddress: (path: string) => Promise<void>;
 	/** Whether addresses are currently being derived. */
 	isDerivingAddresses: boolean;
-	/** Retry opening the Ethereum app on the already-connected device. */
-	retryOpenApp: () => Promise<void>;
+	/** Retry the last failed operation (signing, opening app, etc.). */
+	retry: () => Promise<void>;
 	/** Whether there is an active DMK session (device physically connected). */
 	hasActiveSession: boolean;
 }
@@ -242,6 +242,23 @@ function looksLikeLocked(error: unknown): boolean {
 	} catch {
 		return false;
 	}
+}
+
+/** Check if an error indicates the Ethereum app is not open on the device. */
+function isAppNotOpenError(error: unknown): boolean {
+	const { tags, codes } = collectErrorTags(error);
+	if (codes.includes("6d00")) return true;
+	if (tags.includes("OpenAppDeviceActionError")) return true;
+	// Also check serialised error for common patterns
+	try {
+		const str = typeof error === "string" ? error : JSON.stringify(error);
+		if (/6d00|app.*not.*open|wrong.*app/i.test(str ?? "")) return true;
+		if (error instanceof Error && /6d00|app.*not.*open|wrong.*app/i.test(error.message))
+			return true;
+	} catch {
+		// ignore
+	}
+	return false;
 }
 
 /**
@@ -429,6 +446,15 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 	const derivationPathRef = useRef<string>(
 		localStorage.getItem(LS_DERIVATION_PATH_KEY) ?? DEFAULT_DERIVATION_PATH,
 	);
+	// Timer ref for auto-dismissing the success state in observeDeviceAction.
+	// Stored so it can be cancelled if a new device action starts before it fires.
+	const successDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Generic retry callback — set by each operation so that the "Retry"
+	// button in DeviceActionDialog re-runs the correct action (signing,
+	// opening app, etc.) instead of always going through the full connect flow.
+	const retryCallbackRef = useRef<(() => Promise<void>) | null>(null);
+
 	// Resolver for pending signing operations waiting for a session
 	const pendingSessionResolverRef = useRef<{
 		resolve: (value: { dmk: DeviceManagementKit; sessionId: DeviceSessionId }) => void;
@@ -520,26 +546,86 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			throw new Error("No device connected.");
 		}
 		const dmk = getDmk();
-		const ethSigner = buildEthSigner(dmk, sessionId);
 
-		// Try deriving an address silently — if it succeeds, the
-		// Ethereum app is already running and we can skip the open flow.
-		const firstPath = DERIVATION_PATHS[0];
-		if (firstPath) {
-			try {
-				const { observable } = ethSigner.getAddress(firstPath, {
-					checkOnDevice: false,
-					skipOpenApp: true,
+		// ---------------------------------------------------------------
+		// Step 1: Wait for the DMK session to reach a "Ready" state.
+		//         If the device is locked the session stays in "Connected"
+		//         with deviceStatus LOCKED. We show the unlock Lottie and
+		//         wait for the session to advance to Ready* (which means
+		//         the device is unlocked and the DMK has queried the
+		//         running app).
+		// ---------------------------------------------------------------
+		const initialState = await firstValueFrom(dmk.getDeviceSessionState({ sessionId }));
+		console.log(
+			"[ensureEthereumApp] initial session state:",
+			initialState.sessionStateType,
+			"deviceStatus:",
+			initialState.deviceStatus,
+		);
+
+		let readyState = initialState;
+
+		if (
+			initialState.deviceStatus === DeviceStatus.LOCKED ||
+			initialState.sessionStateType === DeviceSessionStateType.Connected
+		) {
+			// Show unlock UI if the device is locked
+			if (initialState.deviceStatus === DeviceStatus.LOCKED) {
+				setDeviceActionState({
+					status: "unlock-device",
+					message: "Please unlock your Ledger device",
 				});
-				const result = await lastValueFrom(observable);
-				if (result.status === DeviceActionStatus.Completed) {
-					return true; // app already open
-				}
+			}
+
+			// Wait for the session to reach a Ready state (up to 2 min)
+			try {
+				readyState = await firstValueFrom(
+					dmk.getDeviceSessionState({ sessionId }).pipe(
+						filter(
+							(s) =>
+								s.sessionStateType === DeviceSessionStateType.ReadyWithoutSecureChannel ||
+								s.sessionStateType === DeviceSessionStateType.ReadyWithSecureChannel,
+						),
+						timeout(120_000),
+					),
+				);
+				console.log(
+					"[ensureEthereumApp] session ready:",
+					readyState.sessionStateType,
+					"deviceStatus:",
+					readyState.deviceStatus,
+				);
 			} catch {
-				// Ethereum app is not open — we'll open it below
+				// Timeout or error — clear unlock UI and proceed to OpenApp
+				console.log("[ensureEthereumApp] timed out waiting for session ready");
+				setDeviceActionState(null);
 			}
 		}
 
+		// Clear the unlock UI if we showed it
+		setDeviceActionState(null);
+
+		// ---------------------------------------------------------------
+		// Step 2: Check the currentApp from the ready session state.
+		//         Ready states include a `currentApp` field that tells us
+		//         which app is running without sending any APDU.
+		// ---------------------------------------------------------------
+		if (
+			readyState.sessionStateType === DeviceSessionStateType.ReadyWithoutSecureChannel ||
+			readyState.sessionStateType === DeviceSessionStateType.ReadyWithSecureChannel
+		) {
+			const currentApp = (readyState as { currentApp?: { name: string } }).currentApp;
+			console.log("[ensureEthereumApp] currentApp:", currentApp?.name);
+			if (currentApp?.name === "Ethereum") {
+				console.log("[ensureEthereumApp] Ethereum app already open — skipping OpenApp");
+				return true;
+			}
+		}
+
+		// ---------------------------------------------------------------
+		// Step 3: Ethereum app is not open — use OpenAppWithDependencies.
+		// ---------------------------------------------------------------
+		console.log("[ensureEthereumApp] opening Ethereum app via OpenAppWithDependencies");
 		const openAppAction = new OpenAppWithDependenciesDeviceAction({
 			input: {
 				application: { name: "Ethereum" },
@@ -553,7 +639,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 		});
 
 		await observeDeviceAction(openAppObservable, "Ethereum app setup");
-		return false; // app was not open, we opened it
+		return false;
 	}, []);
 
 	// -----------------------------------------------------------------------
@@ -618,18 +704,39 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 			const recoverable = classifyRecoverableError(err);
 			if (recoverable) {
-				setDeviceActionState({
-					...recoverable,
-					canRetry: recoverable.canRetry === true || recoverable.status === "open-app",
+				setDeviceActionState((prev) => {
+					if (prev && prev.status !== "error" && prev.status !== "success") return prev;
+					return {
+						...recoverable,
+						canRetry: recoverable.canRetry === true || recoverable.status === "open-app",
+					};
 				});
 			} else {
-				const message = humanizeError(err);
-				const errorObj = new Error(message);
-				setError(errorObj);
-				setDeviceActionState({ status: "error", message, error: errorObj });
+				setDeviceActionState((prev) => {
+					if (prev && prev.status !== "error" && prev.status !== "success") return prev;
+					const message = humanizeError(err);
+					const errorObj = new Error(message);
+					setError(errorObj);
+					return { status: "error", message, error: errorObj };
+				});
 			}
 		}
 	}, [openAppAndDeriveAddresses, monitorSession]);
+
+	// -----------------------------------------------------------------------
+	// Generic retry: delegates to the stored retry callback, or falls back
+	// to retryOpenApp for open-app/connect related errors.
+	// -----------------------------------------------------------------------
+	const retry = useCallback(async () => {
+		const cb = retryCallbackRef.current;
+		if (cb) {
+			retryCallbackRef.current = null;
+			setDeviceActionState(null);
+			await cb();
+		} else {
+			await retryOpenApp();
+		}
+	}, [retryOpenApp]);
 
 	// -----------------------------------------------------------------------
 	// Connect
@@ -679,83 +786,16 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				}
 
 				// ---------------------------------------------------------------
-				// Wait for the session to initialise so the DMK can detect
-				// whether the device is locked. With the session refresher
-				// enabled, the DMK polls the device and advances the
-				// session state from "Connected" → "Ready…".
+				// DMK device actions (getAddress, OpenAppWithDependencies,
+				// signTransaction, etc.) handle the locked device state
+				// natively via their built-in state machine. They emit
+				// UserInteractionRequired.UnlockDevice and wait for the
+				// user to enter their PIN before continuing.
 				//
-				// We wait up to 10 s for either:
-				//  • a LOCKED deviceStatus  → show the unlock Lottie
-				//  • a Ready* sessionState  → device is unlocked and ready
-				//  • timeout                → proceed optimistically
+				// We rely on observeDeviceAction to map these intermediate
+				// states to the correct UI (unlock Lottie, etc.) rather
+				// than trying to detect and handle the locked state manually.
 				// ---------------------------------------------------------------
-				let deviceLocked = false;
-
-				try {
-					const settled = await firstValueFrom(
-						dmk.getDeviceSessionState({ sessionId }).pipe(
-							filter(
-								(s) =>
-									s.deviceStatus === DeviceStatus.LOCKED ||
-									s.sessionStateType !== DeviceSessionStateType.Connected,
-							),
-							timeout(10_000),
-						),
-					);
-
-					if (settled.deviceStatus === DeviceStatus.LOCKED) {
-						deviceLocked = true;
-					}
-				} catch {
-					// Timeout — proceed optimistically (getAddress will handle it)
-				}
-
-				if (deviceLocked) {
-					// Close the connect dialog so DeviceActionDialog is visible.
-					// Keep connectingTransport set so that when we re-open the
-					// dialog after unlock it shows "Waiting for device" instead
-					// of briefly flashing the transport selector.
-					setShowConnectDialog(false);
-
-					// Show the unlock Lottie
-					setDeviceActionState({
-						status: "unlock-device",
-						message: "Please unlock your Ledger device",
-					});
-
-					// Wait for the device to become unlocked (up to 2 min)
-					try {
-						await firstValueFrom(
-							dmk.getDeviceSessionState({ sessionId }).pipe(
-								filter((s) => s.deviceStatus !== DeviceStatus.LOCKED),
-								timeout(120_000),
-							),
-						);
-					} catch {
-						// Timed out waiting for unlock — fall through and let getAddress handle it
-					}
-
-					// Device unlocked — wait for the session to fully
-					// re-synchronise with the device. Without this the DMK
-					// may not yet know which app is running, causing the
-					// subsequent getAddress(skipOpenApp) probe to fail and
-					// unnecessarily closing / reopening the Ethereum app.
-					try {
-						await firstValueFrom(
-							dmk.getDeviceSessionState({ sessionId }).pipe(
-								filter((s) => s.sessionStateType !== DeviceSessionStateType.Connected),
-								timeout(5_000),
-							),
-						);
-					} catch {
-						// Timeout — proceed anyway
-					}
-
-					// Clear the unlock UI and re-open the connect dialog
-					// so the deriving loader shows
-					setDeviceActionState(null);
-					setShowConnectDialog(true);
-				}
 
 				// If we already have a persisted account (e.g. reconnecting
 				// after a page refresh), just ensure the Ethereum app is open
@@ -794,24 +834,30 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					pendingSessionResolverRef.current = null;
 				}
 
-				// Check if this is a recoverable device error (locked, refused, etc.)
+				// observeDeviceAction may have already set a recoverable
+				// deviceActionState (e.g. unlock-device). Use a functional
+				// update so we don't overwrite it with a generic error.
 				const recoverable = classifyRecoverableError(err);
 				if (recoverable) {
-					setDeviceActionState({
-						...recoverable,
-						canRetry:
-							recoverable.canRetry === true ||
-							recoverable.status === "unlock-device" ||
-							recoverable.status === "open-app",
+					setDeviceActionState((prev) => {
+						// Keep existing recoverable state if already set
+						if (prev && prev.status !== "error" && prev.status !== "success") return prev;
+						return {
+							...recoverable,
+							canRetry:
+								recoverable.canRetry === true ||
+								recoverable.status === "unlock-device" ||
+								recoverable.status === "open-app",
+						};
 					});
 				} else {
-					const message = humanizeError(err);
-					const errorObj = new Error(message);
-					setError(errorObj);
-					setDeviceActionState({
-						status: "error",
-						message,
-						error: errorObj,
+					setDeviceActionState((prev) => {
+						// Keep existing recoverable state from observeDeviceAction
+						if (prev && prev.status !== "error" && prev.status !== "success") return prev;
+						const message = humanizeError(err);
+						const errorObj = new Error(message);
+						setError(errorObj);
+						return { status: "error", message, error: errorObj };
 					});
 				}
 			} finally {
@@ -941,6 +987,12 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			>,
 			operationLabel: string,
 		): Promise<T> => {
+			// Cancel any pending success-dismiss timer from a previous action
+			if (successDismissTimerRef.current) {
+				clearTimeout(successDismissTimerRef.current);
+				successDismissTimerRef.current = null;
+			}
+
 			return new Promise<T>((resolve, reject) => {
 				const subscription = observable.subscribe({
 					next: (state) => {
@@ -1028,7 +1080,10 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 									status: "success",
 									message: `${operationLabel} confirmed`,
 								});
-								setTimeout(() => setDeviceActionState(null), 1500);
+								successDismissTimerRef.current = setTimeout(() => {
+									successDismissTimerRef.current = null;
+									setDeviceActionState(null);
+								}, 1500);
 								subscription.unsubscribe();
 								resolve(state.output);
 								break;
@@ -1101,6 +1156,9 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				message: "Preparing transaction…",
 			});
 
+			// Declared before try so it can be captured by the retry callback in catch
+			let doSign: (() => Promise<{ r: string; s: string; v: number }>) | null = null;
+
 			try {
 				const publicClient = createPublicClient({
 					chain,
@@ -1138,15 +1196,23 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					throw new Error("Failed to serialize transaction");
 				}
 
-				const ethSigner = buildEthSigner(dmk, sessionId);
+				// Inner helper for the signing step so retry can re-invoke it
+				doSign = async (): Promise<{ r: string; s: string; v: number }> => {
+					const signer = buildEthSigner(dmk, sessionId);
+					const { observable } = signer.signTransaction(derivationPathRef.current, txBytes, {
+						skipOpenApp: true,
+					});
+					return observeDeviceAction(observable, "Transaction");
+				};
 
-				const { observable: signObservable } = ethSigner.signTransaction(
-					derivationPathRef.current,
-					txBytes,
-					{ skipOpenApp: true },
-				);
-
-				const signature = await observeDeviceAction(signObservable, "Transaction");
+				let signature: { r: string; s: string; v: number };
+				try {
+					signature = await doSign();
+				} catch (firstErr) {
+					if (!isAppNotOpenError(firstErr)) throw firstErr;
+					await ensureEthereumApp();
+					signature = await doSign();
+				}
 
 				const r = signature.r.startsWith("0x") ? signature.r : `0x${signature.r}`;
 				const s = signature.s.startsWith("0x") ? signature.s : `0x${signature.s}`;
@@ -1170,22 +1236,37 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					status: "success",
 					message: "Transaction broadcast successfully",
 				});
-				setTimeout(() => setDeviceActionState(null), 2000);
+				successDismissTimerRef.current = setTimeout(() => {
+					successDismissTimerRef.current = null;
+					setDeviceActionState(null);
+				}, 2000);
 
 				return txHash;
 			} catch (err) {
-				if (!deviceActionState || deviceActionState.status !== "error") {
-					const message = humanizeError(err);
-					setDeviceActionState({
-						status: "error",
-						message,
-						error: new Error(message),
-					});
+				if (doSign) {
+					const capturedDoSign = doSign;
+					retryCallbackRef.current = async () => {
+						setDeviceActionState({ status: "open-app", message: "Preparing transaction…" });
+						try {
+							await capturedDoSign();
+						} catch (retryErr) {
+							setDeviceActionState((prev) => {
+								if (prev) return prev;
+								const msg = humanizeError(retryErr);
+								return { status: "error", message: msg, error: new Error(msg) };
+							});
+						}
+					};
 				}
+				setDeviceActionState((prev) => {
+					if (prev) return prev;
+					const msg = humanizeError(err);
+					return { status: "error", message: msg, error: new Error(msg) };
+				});
 				throw err instanceof Error ? err : new Error(humanizeError(err));
 			}
 		},
-		[account, chainId, ensureSession, observeDeviceAction, deviceActionState],
+		[account, chainId, ensureSession, observeDeviceAction, ensureEthereumApp],
 	);
 
 	// -----------------------------------------------------------------------
@@ -1200,34 +1281,51 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				message: "Preparing to sign typed data…",
 			});
 
-			try {
-				const parsed: TypedData =
-					typeof typedData === "string" ? JSON.parse(typedData) : (typedData as TypedData);
+			const parsed: TypedData =
+				typeof typedData === "string" ? JSON.parse(typedData) : (typedData as TypedData);
 
+			const doSign = async (): Promise<string> => {
 				const ethSigner = buildEthSigner(dmk, sessionId);
-
-				const { observable: signObservable } = ethSigner.signTypedData(
-					derivationPathRef.current,
-					parsed,
-					{ skipOpenApp: true },
-				);
-
-				const signature = await observeDeviceAction(signObservable, "Typed data signing");
-
+				const { observable } = ethSigner.signTypedData(derivationPathRef.current, parsed, {
+					skipOpenApp: true,
+				});
+				const signature = await observeDeviceAction(observable, "Typed data signing");
 				return signatureToHex(signature);
-			} catch (err) {
-				if (!deviceActionState || deviceActionState.status !== "error") {
-					const message = humanizeError(err);
-					setDeviceActionState({
-						status: "error",
-						message,
-						error: new Error(message),
-					});
+			};
+
+			try {
+				try {
+					return await doSign();
+				} catch (firstErr) {
+					if (!isAppNotOpenError(firstErr)) throw firstErr;
+					await ensureEthereumApp();
+					return await doSign();
 				}
+			} catch (err) {
+				retryCallbackRef.current = async () => {
+					setDeviceActionState({
+						status: "open-app",
+						message: "Preparing to sign typed data…",
+					});
+					try {
+						await doSign();
+					} catch (retryErr) {
+						setDeviceActionState((prev) => {
+							if (prev) return prev;
+							const msg = humanizeError(retryErr);
+							return { status: "error", message: msg, error: new Error(msg) };
+						});
+					}
+				};
+				setDeviceActionState((prev) => {
+					if (prev) return prev;
+					const msg = humanizeError(err);
+					return { status: "error", message: msg, error: new Error(msg) };
+				});
 				throw err instanceof Error ? err : new Error(humanizeError(err));
 			}
 		},
-		[ensureSession, observeDeviceAction, deviceActionState],
+		[ensureSession, observeDeviceAction, ensureEthereumApp],
 	);
 
 	// -----------------------------------------------------------------------
@@ -1242,31 +1340,47 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				message: "Preparing to sign message…",
 			});
 
-			try {
+			// Inner helper so we can store it as a retry callback
+			const doSign = async (): Promise<string> => {
 				const ethSigner = buildEthSigner(dmk, sessionId);
-
-				const { observable: signObservable } = ethSigner.signMessage(
-					derivationPathRef.current,
-					message,
-					{ skipOpenApp: true },
-				);
-
-				const signature = await observeDeviceAction(signObservable, "Message signing");
-
+				const { observable } = ethSigner.signMessage(derivationPathRef.current, message, {
+					skipOpenApp: true,
+				});
+				const signature = await observeDeviceAction(observable, "Message signing");
 				return signatureToHex(signature);
-			} catch (err) {
-				if (!deviceActionState || deviceActionState.status !== "error") {
-					const message = humanizeError(err);
-					setDeviceActionState({
-						status: "error",
-						message,
-						error: new Error(message),
-					});
+			};
+
+			try {
+				try {
+					return await doSign();
+				} catch (firstErr) {
+					if (!isAppNotOpenError(firstErr)) throw firstErr;
+					await ensureEthereumApp();
+					return await doSign();
 				}
+			} catch (err) {
+				// Store retry callback so the Retry button re-sends the signing
+				retryCallbackRef.current = async () => {
+					setDeviceActionState({ status: "open-app", message: "Preparing to sign message…" });
+					try {
+						await doSign();
+					} catch (retryErr) {
+						setDeviceActionState((prev) => {
+							if (prev) return prev;
+							const msg = humanizeError(retryErr);
+							return { status: "error", message: msg, error: new Error(msg) };
+						});
+					}
+				};
+				setDeviceActionState((prev) => {
+					if (prev) return prev;
+					const msg = humanizeError(err);
+					return { status: "error", message: msg, error: new Error(msg) };
+				});
 				throw err instanceof Error ? err : new Error(humanizeError(err));
 			}
 		},
-		[ensureSession, observeDeviceAction, deviceActionState],
+		[ensureSession, observeDeviceAction, ensureEthereumApp],
 	);
 
 	// -----------------------------------------------------------------------
@@ -1277,6 +1391,10 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 	}, []);
 
 	const dismissDeviceAction = useCallback(() => {
+		if (successDismissTimerRef.current) {
+			clearTimeout(successDismissTimerRef.current);
+			successDismissTimerRef.current = null;
+		}
 		setDeviceActionState(null);
 	}, []);
 
@@ -1307,7 +1425,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			selectAddress,
 			deriveCustomAddress,
 			isDerivingAddresses,
-			retryOpenApp,
+			retry,
 			hasActiveSession,
 		}),
 		[
@@ -1331,7 +1449,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			selectAddress,
 			deriveCustomAddress,
 			isDerivingAddresses,
-			retryOpenApp,
+			retry,
 			hasActiveSession,
 		],
 	);

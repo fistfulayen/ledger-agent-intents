@@ -103,7 +103,7 @@ function getStatusConfig(status: DeviceActionUiState["status"]): StatusConfig {
 // =============================================================================
 
 export function DeviceActionDialog() {
-	const { deviceActionState, deviceModelId, dismissDeviceAction, retryOpenApp } = useLedger();
+	const { deviceActionState, deviceModelId, dismissDeviceAction, retry } = useLedger();
 
 	const animationData = useMemo(() => {
 		if (!deviceActionState) return null;
@@ -231,7 +231,7 @@ export function DeviceActionDialog() {
 									appearance="accent"
 									size="md"
 									onClick={() => {
-										retryOpenApp();
+										retry();
 									}}
 								>
 									Retry
