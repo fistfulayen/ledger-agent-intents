@@ -9,6 +9,7 @@ import {
 	isValidEvmAddress,
 	formatAtomicAmount,
 	extractDomain,
+	checkUsdcBalance,
 } from "@/lib/x402-validation";
 import { useUpdateIntentStatus } from "@/queries/intents";
 import {
@@ -646,6 +647,19 @@ function IntentActions({ intent, onClose }: IntentActionsProps) {
 				return;
 			}
 
+			// Pre-sign USDC balance check: avoid wasting a Ledger interaction if
+			// the user doesn't have enough USDC to cover the payment.
+			const balanceError = await checkUsdcBalance(
+				account,
+				accepted.asset,
+				accepted.amount,
+				chainId,
+			);
+			if (balanceError) {
+				setError(balanceError);
+				return;
+			}
+
 			const nowSec = Math.floor(Date.now() / 1000);
 			const timeout = accepted.maxTimeoutSeconds ?? 300; // Increase default to 5 minutes
 			const authorization = {
@@ -732,22 +746,26 @@ function IntentActions({ intent, onClose }: IntentActionsProps) {
 					console.warn("Local signature verification failed:", verifyErr);
 				}
 
-				const paymentPayload: X402PaymentPayload = {
-					x402Version: 2,
-					resource,
-					accepted,
-					payload: { signature, authorization },
-					extensions: {},
-				};
+			const paymentPayload: X402PaymentPayload = {
+				x402Version: 2,
+				resource,
+				accepted,
+				payload: { signature, authorization },
+				extensions: {},
+			};
 
-				const paymentSignatureHeader = base64EncodeUtf8(JSON.stringify(paymentPayload));
+			const paymentSignatureHeader = base64EncodeUtf8(JSON.stringify(paymentPayload));
 
-				await updateStatus.mutateAsync({
-					id: intent.id,
-					status: "authorized", // x402 payment authorized
-					paymentSignatureHeader,
-					paymentPayload,
-				});
+			// Compute expiry from validBefore (Unix seconds -> ISO string)
+			const expiresAt = new Date(Number(authorization.validBefore) * 1000).toISOString();
+
+			await updateStatus.mutateAsync({
+				id: intent.id,
+				status: "authorized", // x402 payment authorized
+				paymentSignatureHeader,
+				paymentPayload,
+				expiresAt,
+			});
 
 				onClose();
 			} catch (err) {
