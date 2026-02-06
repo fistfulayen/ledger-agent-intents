@@ -122,9 +122,12 @@ export function ConnectDeviceDialog() {
 	// anything (interaction, error, success) — it takes priority.
 	const deviceActionActive = deviceActionState != null;
 
-	// Don't show the dialog if there's an active session (disconnect
-	// is available from the header) or if a device action is in progress.
-	const isOpen = showConnectDialog && !deviceActionActive && !hasActiveSession;
+	// Don't show the dialog if there's an active session and we're idle
+	// (disconnect is available from the header). Keep it open during the
+	// connection flow (isConnecting / isDerivingAddresses) even though
+	// hasActiveSession may already be true at that point.
+	const isIdle = !isConnecting && !isDerivingAddresses;
+	const isOpen = showConnectDialog && !deviceActionActive && !(hasActiveSession && isIdle);
 
 	return (
 		<Dialog open={isOpen} onOpenChange={setShowConnectDialog}>
