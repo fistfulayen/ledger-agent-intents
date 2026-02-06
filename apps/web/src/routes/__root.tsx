@@ -1,13 +1,10 @@
-import {
-	Outlet,
-	ScrollRestoration,
-	createRootRoute,
-} from "@tanstack/react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { LedgerProvider } from "@/lib/ledger-provider";
+import { ConnectDeviceDialog } from "@/components/device/ConnectDeviceDialog";
+import { DeviceActionDialog } from "@/components/device/DeviceActionDialog";
 import { Shell } from "@/components/layout/Shell";
+import { LedgerProvider } from "@/lib/ledger-provider";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Outlet, ScrollRestoration, createRootRoute } from "@tanstack/react-router";
 import "@/styles/app.css";
-import "@ledgerhq/ledger-wallet-provider/styles.css";
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -41,6 +38,8 @@ function RootComponent() {
 					<Outlet />
 				</Shell>
 				<ScrollRestoration />
+				<DeviceActionDialog />
+				<ConnectDeviceDialog />
 			</LedgerProvider>
 		</QueryClientProvider>
 	);

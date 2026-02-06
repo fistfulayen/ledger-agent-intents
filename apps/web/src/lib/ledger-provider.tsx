@@ -1,16 +1,46 @@
-"use client";
-
 import {
+	DeviceActionStatus,
+	type DeviceManagementKit,
+	DeviceManagementKitBuilder,
+	type DeviceSessionId,
+	DeviceStatus,
+	type DiscoveredDevice,
+	UserInteractionRequired,
+	hexaStringToBuffer,
+} from "@ledgerhq/device-management-kit";
+import {
+	type Signature as EthSignature,
+	SignerEthBuilder,
+	type TypedData,
+} from "@ledgerhq/device-signer-kit-ethereum";
+import { webBleIdentifier, webBleTransportFactory } from "@ledgerhq/device-transport-kit-web-ble";
+import { webHidIdentifier, webHidTransportFactory } from "@ledgerhq/device-transport-kit-web-hid";
+import {
+	type ReactNode,
 	createContext,
+	useCallback,
 	useContext,
 	useEffect,
-	useState,
-	useCallback,
 	useMemo,
 	useRef,
-	type ReactNode,
+	useState,
 } from "react";
-import type { EIP6963ProviderDetail } from "@ledgerhq/ledger-wallet-provider";
+import { firstValueFrom } from "rxjs";
+import { filter } from "rxjs/operators";
+import {
+	http,
+	type Chain,
+	type TransactionSerializable,
+	createPublicClient,
+	serializeTransaction,
+} from "viem";
+import { base, baseSepolia, sepolia } from "viem/chains";
+
+// =============================================================================
+// Types
+// =============================================================================
+
+export type TransportType = "usb" | "ble";
 
 interface TransactionRequest {
 	to: string;
@@ -18,475 +48,663 @@ interface TransactionRequest {
 	value?: string;
 }
 
+export type DeviceActionUiState = {
+	status:
+		| "connecting"
+		| "unlock-device"
+		| "allow-secure-connection"
+		| "open-app"
+		| "confirm-open-app"
+		| "sign-transaction"
+		| "sign-message"
+		| "sign-typed-data"
+		| "verify-address"
+		| "success"
+		| "error"
+		| "deriving-address";
+	message: string;
+	error?: Error;
+};
+
 interface LedgerContextType {
 	account: string | null;
 	chainId: number | null;
 	isConnected: boolean;
 	isConnecting: boolean;
 	error: Error | null;
-	connect: () => Promise<void>;
+	connect: (transport?: TransportType) => Promise<void>;
 	disconnect: () => void;
 	sendTransaction: (tx: TransactionRequest) => Promise<string>;
 	signTypedDataV4: (typedData: unknown) => Promise<string>;
 	personalSign: (message: string) => Promise<string>;
 	openLedgerModal: () => void;
+	deviceActionState: DeviceActionUiState | null;
+	setShowConnectDialog: (show: boolean) => void;
+	showConnectDialog: boolean;
 }
 
 const LedgerContext = createContext<LedgerContextType | null>(null);
 
-// Module-level singleton to prevent re-initialization during HMR
-let ledgerInitialized = false;
-let ledgerCleanupFn: (() => void) | undefined;
-let ledgerAppReady = false;
+// =============================================================================
+// DMK Singleton (persists across HMR)
+// =============================================================================
 
-/**
- * Dismiss the Ledger SDK overlay modal (success, rejection, or error).
- *
- * The modal (`<ledger-core-modal>`) can live in the top-level document OR
- * inside the shadow DOM of another Ledger web-component. We search both
- * locations, try clicking the close button, and ultimately remove the
- * element from the DOM so the user is never stuck on a frozen overlay.
- *
- * Multiple attempts with staggered delays handle cases where the SDK
- * creates or re-renders the modal asynchronously.
- */
-function dismissLedgerModal(): void {
-	const nuke = () => {
-		// 1. Top-level document
-		for (const modal of document.querySelectorAll("ledger-core-modal")) {
-			tryCloseOrRemove(modal as HTMLElement);
-		}
+let dmkInstance: DeviceManagementKit | null = null;
 
-		// 2. Inside shadow roots of known Ledger custom elements
-		const hosts = document.querySelectorAll(
-			"ledger-button-app, ledger-button-provider, ledger-button",
-		);
-		for (const host of hosts) {
-			if (host.shadowRoot) {
-				for (const modal of host.shadowRoot.querySelectorAll(
-					"ledger-core-modal",
-				)) {
-					tryCloseOrRemove(modal as HTMLElement);
-				}
-			}
-		}
-	};
+/** Ledger API key used as the origin token for clear-signing support. */
+const LEDGER_API_KEY: string = import.meta.env.VITE_LEDGER_API_KEY ?? "";
 
-	// Fire immediately and at staggered intervals to catch async re-renders
-	nuke();
-	setTimeout(nuke, 150);
-	setTimeout(nuke, 400);
-	setTimeout(nuke, 800);
-}
-
-/** Try to click the close button inside a modal's shadow root, then remove it. */
-function tryCloseOrRemove(modal: HTMLElement): void {
-	if (modal.shadowRoot) {
-		const closeBtn = modal.shadowRoot.querySelector<HTMLElement>(
-			"button, [data-dismiss], .close-button, [aria-label='Close']",
-		);
-		closeBtn?.click();
+function getDmk(): DeviceManagementKit {
+	if (!dmkInstance) {
+		const builder = new DeviceManagementKitBuilder();
+		builder.addTransport(webHidTransportFactory).addTransport(webBleTransportFactory);
+		dmkInstance = builder.build();
 	}
-	// Always remove – the click may not work if the SDK's handlers are broken
-	modal.remove();
+	return dmkInstance;
 }
+
+// =============================================================================
+// Chain configuration
+// =============================================================================
+
+const CHAIN_MAP: Record<number, Chain> = {
+	8453: base,
+	84532: baseSepolia,
+	11155111: sepolia,
+};
+
+// Default chain: Base mainnet
+const DEFAULT_CHAIN_ID = 8453;
+
+function getChain(chainId: number): Chain {
+	return CHAIN_MAP[chainId] ?? base;
+}
+
+function getRpcUrl(chainId: number): string {
+	// Use custom RPC URL for Base mainnet if configured
+	if (chainId === 8453) {
+		const customRpc = import.meta.env.VITE_BASE_MAINNET_RPC_URL;
+		if (typeof customRpc === "string" && customRpc.trim().length > 0) {
+			return customRpc.trim();
+		}
+	}
+	const chain = getChain(chainId);
+	return chain.rpcUrls.default.http[0] ?? "https://mainnet.base.org";
+}
+
+// Default derivation path (Ledger Live)
+const DEFAULT_DERIVATION_PATH = "44'/60'/0'/0/0";
+
+// =============================================================================
+// Helper: convert Signature to hex
+// =============================================================================
+
+function signatureToHex(sig: EthSignature): string {
+	// r and s are HexaStrings (0x-prefixed), v is a number
+	const r = sig.r.startsWith("0x") ? sig.r.slice(2) : sig.r;
+	const s = sig.s.startsWith("0x") ? sig.s.slice(2) : sig.s;
+	const v = sig.v.toString(16).padStart(2, "0");
+	return `0x${r}${s}${v}`;
+}
+
+// =============================================================================
+// Provider Component
+// =============================================================================
 
 export function LedgerProvider({ children }: { children: ReactNode }) {
-	const [provider, setProvider] = useState<EIP6963ProviderDetail | null>(null);
 	const [account, setAccount] = useState<string | null>(null);
-	const [chainId, setChainId] = useState<number | null>(null);
+	const [chainId, setChainId] = useState<number | null>(DEFAULT_CHAIN_ID);
 	const [isConnecting, setIsConnecting] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
+	const [deviceActionState, setDeviceActionState] = useState<DeviceActionUiState | null>(null);
+	const [showConnectDialog, setShowConnectDialog] = useState(false);
 
-	// Track the provider UUID to avoid re-setting state for the same provider
-	const providerUuidRef = useRef<string | null>(null);
+	const sessionIdRef = useRef<DeviceSessionId | null>(null);
+	const derivationPathRef = useRef<string>(DEFAULT_DERIVATION_PATH);
+	const deviceSessionSubRef = useRef<{ unsubscribe: () => void } | null>(null);
 
-	const useStubDAppConfig =
-		import.meta.env.VITE_LEDGER_STUB_DAPP_CONFIG === "true";
+	// -----------------------------------------------------------------------
+	// Cleanup on unmount
+	// -----------------------------------------------------------------------
+	useEffect(() => {
+		return () => {
+			deviceSessionSubRef.current?.unsubscribe();
+		};
+	}, []);
 
-	// Helper: query the provider for current account & chain and update React state.
-	// Uses eth_accounts (passive, never opens a modal) and eth_chainId.
-	const syncProviderState = useCallback(
-		(p: EIP6963ProviderDetail) => {
-			p.provider
-				.request({ method: "eth_accounts", params: [] })
-				.then((raw: unknown) => {
-					const accounts = Array.isArray(raw) ? (raw as string[]) : [];
-					setAccount(accounts[0] || null);
-				})
-				.catch(() => {});
+	// -----------------------------------------------------------------------
+	// Monitor device session state for disconnection
+	// -----------------------------------------------------------------------
+	const monitorSession = useCallback((sessionId: DeviceSessionId) => {
+		const dmk = getDmk();
+		deviceSessionSubRef.current?.unsubscribe();
 
-			p.provider
-				.request({ method: "eth_chainId", params: [] })
-				.then((raw: unknown) => {
-					if (typeof raw === "string") {
-						setChainId(Number.parseInt(raw, 16));
-					}
-				})
-				.catch(() => {});
+		const subscription = dmk.getDeviceSessionState({ sessionId }).subscribe({
+			next: (state) => {
+				if (state.deviceStatus === DeviceStatus.NOT_CONNECTED) {
+					setAccount(null);
+					sessionIdRef.current = null;
+					setDeviceActionState({
+						status: "error",
+						message: "Device disconnected",
+						error: new Error("Device disconnected"),
+					});
+					// Auto-dismiss the error after 3 seconds
+					setTimeout(() => setDeviceActionState(null), 3000);
+				}
+			},
+			error: () => {
+				// Session gone
+				setAccount(null);
+				sessionIdRef.current = null;
+			},
+		});
+
+		deviceSessionSubRef.current = subscription;
+	}, []);
+
+	// -----------------------------------------------------------------------
+	// Connect
+	// -----------------------------------------------------------------------
+	const connect = useCallback(
+		async (transport: TransportType = "usb") => {
+			setIsConnecting(true);
+			setError(null);
+			setDeviceActionState({
+				status: "connecting",
+				message:
+					transport === "ble"
+						? "Searching for Bluetooth devices..."
+						: "Searching for USB devices...",
+			});
+
+			try {
+				const dmk = getDmk();
+
+				// Check environment support
+				if (!dmk.isEnvironmentSupported()) {
+					throw new Error(
+						"Your browser does not support WebHID or WebBLE. Please use a compatible browser like Chrome.",
+					);
+				}
+
+				const transportIdentifier = transport === "usb" ? webHidIdentifier : webBleIdentifier;
+
+				// Start discovery and grab the first device
+				const device: DiscoveredDevice = await firstValueFrom(
+					dmk.startDiscovering({ transport: transportIdentifier }),
+				);
+				await dmk.stopDiscovering();
+
+				// Connect to device
+				setDeviceActionState({
+					status: "connecting",
+					message: "Connecting to your Ledger...",
+				});
+
+				const sessionId = await dmk.connect({
+					device,
+					sessionRefresherOptions: {
+						isRefresherDisabled: true,
+					},
+				});
+
+				sessionIdRef.current = sessionId;
+
+				// Wait for device session to be ready
+				setDeviceActionState({
+					status: "deriving-address",
+					message: "Deriving your address...",
+				});
+
+				// Build the Ethereum signer
+				const ethSigner = new SignerEthBuilder({
+					dmk,
+					sessionId,
+					originToken: LEDGER_API_KEY,
+				}).build();
+
+				// Get address from device
+				const { observable: addressObservable } = ethSigner.getAddress(derivationPathRef.current, {
+					checkOnDevice: false,
+				});
+
+				const addressState = await firstValueFrom(
+					addressObservable.pipe(
+						filter(
+							(state) =>
+								state.status === DeviceActionStatus.Completed ||
+								state.status === DeviceActionStatus.Error,
+						),
+					),
+				);
+
+				if (addressState.status === DeviceActionStatus.Error) {
+					throw new Error(`Failed to derive address: ${String(addressState.error)}`);
+				}
+
+				if (addressState.status === DeviceActionStatus.Completed) {
+					const address = addressState.output.address;
+					setAccount(address);
+				}
+
+				// Start monitoring the session for disconnects
+				monitorSession(sessionId);
+
+				setDeviceActionState({
+					status: "success",
+					message: "Connected successfully",
+				});
+
+				// Auto-dismiss success state
+				setTimeout(() => setDeviceActionState(null), 1500);
+				setShowConnectDialog(false);
+			} catch (err) {
+				const errorObj = err instanceof Error ? err : new Error("Connection failed");
+				setError(errorObj);
+				setDeviceActionState({
+					status: "error",
+					message: errorObj.message,
+					error: errorObj,
+				});
+			} finally {
+				setIsConnecting(false);
+				// Make sure discovery is stopped
+				try {
+					getDmk().stopDiscovering();
+				} catch {
+					// Ignore if already stopped
+				}
+			}
+		},
+		[monitorSession],
+	);
+
+	// -----------------------------------------------------------------------
+	// Disconnect
+	// -----------------------------------------------------------------------
+	const disconnect = useCallback(() => {
+		const sessionId = sessionIdRef.current;
+		if (sessionId) {
+			try {
+				getDmk().disconnect({ sessionId });
+			} catch {
+				// Ignore disconnect errors
+			}
+		}
+		deviceSessionSubRef.current?.unsubscribe();
+		deviceSessionSubRef.current = null;
+		sessionIdRef.current = null;
+		setAccount(null);
+		setError(null);
+		setDeviceActionState(null);
+	}, []);
+
+	// -----------------------------------------------------------------------
+	// Ensure we have a connected session for signing operations
+	// -----------------------------------------------------------------------
+	const ensureSession = useCallback((): {
+		dmk: DeviceManagementKit;
+		sessionId: DeviceSessionId;
+	} => {
+		const sessionId = sessionIdRef.current;
+		if (!sessionId) {
+			throw new Error("No device connected. Please connect your Ledger first.");
+		}
+		return { dmk: getDmk(), sessionId };
+	}, []);
+
+	// -----------------------------------------------------------------------
+	// Helper: observe a device action and update UI state
+	// -----------------------------------------------------------------------
+	const observeDeviceAction = useCallback(
+		<T,>(
+			observable: import("rxjs").Observable<
+				import("@ledgerhq/device-management-kit").DeviceActionState<
+					T,
+					// biome-ignore lint/suspicious/noExplicitAny: DMK error types are complex union types
+					any,
+					{ requiredUserInteraction: string; [key: string]: unknown }
+				>
+			>,
+			operationLabel: string,
+		): Promise<T> => {
+			return new Promise<T>((resolve, reject) => {
+				const subscription = observable.subscribe({
+					next: (state) => {
+						switch (state.status) {
+							case DeviceActionStatus.Pending: {
+								const interaction = state.intermediateValue?.requiredUserInteraction;
+								switch (interaction) {
+									case UserInteractionRequired.UnlockDevice:
+										setDeviceActionState({
+											status: "unlock-device",
+											message: "Please unlock your Ledger device",
+										});
+										break;
+									case UserInteractionRequired.AllowSecureConnection:
+										setDeviceActionState({
+											status: "allow-secure-connection",
+											message: "Please allow the secure connection on your device",
+										});
+										break;
+									case UserInteractionRequired.ConfirmOpenApp:
+										setDeviceActionState({
+											status: "confirm-open-app",
+											message: "Please confirm opening the Ethereum app on your device",
+										});
+										break;
+									case UserInteractionRequired.SignTransaction:
+										setDeviceActionState({
+											status: "sign-transaction",
+											message: `Review and confirm the ${operationLabel} on your device`,
+										});
+										break;
+									case UserInteractionRequired.SignPersonalMessage:
+										setDeviceActionState({
+											status: "sign-message",
+											message: "Review and sign the message on your device",
+										});
+										break;
+									case UserInteractionRequired.SignTypedData:
+										setDeviceActionState({
+											status: "sign-typed-data",
+											message: "Review and sign the data on your device",
+										});
+										break;
+									case UserInteractionRequired.VerifyAddress:
+										setDeviceActionState({
+											status: "verify-address",
+											message: "Verify the address on your device",
+										});
+										break;
+									case UserInteractionRequired.None:
+										// No user interaction needed, keep current state
+										break;
+									default:
+										setDeviceActionState({
+											status: "open-app",
+											message: `Please check your device... (${interaction})`,
+										});
+										break;
+								}
+								break;
+							}
+							case DeviceActionStatus.Completed:
+								setDeviceActionState({
+									status: "success",
+									message: `${operationLabel} confirmed`,
+								});
+								setTimeout(() => setDeviceActionState(null), 1500);
+								subscription.unsubscribe();
+								resolve(state.output);
+								break;
+							case DeviceActionStatus.Error: {
+								const errMsg = String(state.error);
+								const isUserRejection =
+									errMsg.includes("6985") ||
+									errMsg.toLowerCase().includes("reject") ||
+									errMsg.toLowerCase().includes("denied");
+								const isBlindSigning = errMsg.includes("6a80");
+
+								let userMessage: string;
+								if (isUserRejection) {
+									userMessage = "Transaction rejected on device";
+								} else if (isBlindSigning) {
+									userMessage =
+										"Blind signing is disabled. Enable it in the Ethereum app settings on your device.";
+								} else {
+									userMessage = `${operationLabel} failed: ${errMsg}`;
+								}
+
+								const errorObj = new Error(userMessage);
+								setDeviceActionState({
+									status: "error",
+									message: userMessage,
+									error: errorObj,
+								});
+								subscription.unsubscribe();
+								reject(errorObj);
+								break;
+							}
+							case DeviceActionStatus.Stopped:
+								subscription.unsubscribe();
+								reject(new Error(`${operationLabel} was cancelled`));
+								break;
+						}
+					},
+					error: (err) => {
+						const errorObj = err instanceof Error ? err : new Error(`${operationLabel} failed`);
+						setDeviceActionState({
+							status: "error",
+							message: errorObj.message,
+							error: errorObj,
+						});
+						reject(errorObj);
+					},
+				});
+			});
 		},
 		[],
 	);
 
-	// Initialize Ledger Button Provider
-	useEffect(() => {
-		if (typeof window === "undefined") return;
-
-		// Set up provider listener - this needs to run on every mount
-		// to update React state when provider announces itself
-		const handleProvider = (e: Event) => {
-			const detail = (e as CustomEvent<EIP6963ProviderDetail>).detail;
-			if (detail.info.name.toLowerCase().includes("ledger")) {
-				// Only update state if this is a different provider (by UUID)
-				// This prevents re-renders from repeated announcements
-				if (providerUuidRef.current !== detail.info.uuid) {
-					providerUuidRef.current = detail.info.uuid;
-					setProvider(detail);
-
-					// Immediately try to recover existing account/chain from the SDK.
-					// Uses eth_accounts (passive, no modal) so a page refresh won't
-					// prompt the user unnecessarily.
-					syncProviderState(detail);
-				}
-			}
-		};
-
-		window.addEventListener("eip6963:announceProvider", handleProvider);
-
-		// Only initialize the Ledger button once (survives HMR)
-		if (!ledgerInitialized) {
-			ledgerInitialized = true;
-
-			const initProvider = async () => {
-				try {
-					const { initializeLedgerProvider } = await import(
-						"@ledgerhq/ledger-wallet-provider"
-					);
-
-					ledgerCleanupFn = initializeLedgerProvider({
-						target: document.body,
-						floatingButtonPosition: false,
-						dAppIdentifier: "multisig",
-						apiKey: import.meta.env.VITE_LEDGER_API_KEY || "",
-						// IMPORTANT: do not pass `undefined` values (can cause runtime errors in downstream code)
-						// Base mainnet override for fee estimation / nonce / etc.
-						rpcUrls: (() => {
-							const out: Record<string, string> = {};
-							const baseMainnet = import.meta.env.VITE_BASE_MAINNET_RPC_URL;
-							if (typeof baseMainnet === "string" && baseMainnet.trim().length > 0) {
-								out["8453"] = baseMainnet.trim();
-							}
-							return out;
-						})(),
-						loggerLevel: "info",
-						devConfig: useStubDAppConfig
-							? {
-									stub: {
-										dAppConfig: true,
-									},
-								}
-							: undefined,
-					});
-					// Mark the app as ready after a short delay to allow it to mount
-					setTimeout(() => {
-						ledgerAppReady = true;
-					}, 100);
-				} catch (err) {
-					console.error("Failed to initialize Ledger provider:", err);
-					ledgerInitialized = false; // Allow retry on error
-				}
-			};
-
-			initProvider();
-		}
-
-		return () => {
-			window.removeEventListener("eip6963:announceProvider", handleProvider);
-			// Don't cleanup the Ledger button on unmount - it should persist
-			// across HMR and React Strict Mode double-mounting.
-			// The button will be cleaned up when the page is unloaded.
-		};
-	}, [useStubDAppConfig, syncProviderState]);
-
-	// Listen for account/chain changes
-	useEffect(() => {
-		if (!provider?.provider.on) return;
-
-		// The Ledger Button SDK dispatches DOM CustomEvents on its HTMLElement
-		// provider. Depending on whether `on()` unwraps the event, the callback
-		// may receive the payload directly (EventEmitter style) or as a
-		// CustomEvent whose `.detail` holds the payload. Handle both.
-		const handleAccountsChanged = (accountsOrEvent: unknown) => {
-			const accounts =
-				(accountsOrEvent as CustomEvent)?.detail ?? accountsOrEvent;
-			if (!Array.isArray(accounts)) {
-				setAccount(null);
-				return;
-			}
-			setAccount((accounts[0] as string | undefined) || null);
-		};
-
-		const handleChainChanged = (chainIdOrEvent: unknown) => {
-			const raw =
-				(chainIdOrEvent as CustomEvent)?.detail ?? chainIdOrEvent;
-			if (typeof raw === "string") {
-				setChainId(Number.parseInt(raw, 16));
-			} else if (typeof raw === "number") {
-				setChainId(raw);
-			}
-		};
-
-		provider.provider.on("accountsChanged", handleAccountsChanged);
-		provider.provider.on("chainChanged", handleChainChanged);
-
-		return () => {
-			provider.provider.removeListener?.(
-				"accountsChanged",
-				handleAccountsChanged,
-			);
-			provider.provider.removeListener?.("chainChanged", handleChainChanged);
-		};
-	}, [provider]);
-
-	const connect = useCallback(async () => {
-		if (!provider) {
-			setError(new Error("Click the Ledger button to connect"));
-			return;
-		}
-
-		setIsConnecting(true);
-		setError(null);
-
-		try {
-			const accountsRaw = await provider.provider.request({
-				method: "eth_requestAccounts",
-				params: [],
-			});
-
-			const accounts = Array.isArray(accountsRaw) ? (accountsRaw as string[]) : [];
-
-			if (accounts.length > 0 && accounts[0]) {
-				setAccount(accounts[0]);
-			}
-
-			const chain = (await provider.provider.request({
-				method: "eth_chainId",
-				params: [],
-			})) as string;
-			setChainId(Number.parseInt(chain, 16));
-		} catch (err) {
-			const error = err instanceof Error ? err : new Error("Connection failed");
-			setError(error);
-			throw error;
-		} finally {
-			setIsConnecting(false);
-		}
-	}, [provider]);
-
-	const disconnect = useCallback(() => {
-		setAccount(null);
-		setChainId(null);
-		setError(null);
-	}, []);
-
-	const openLedgerModal = useCallback(() => {
-		const tryOpenModal = () => {
-			// Find the ledger-button-app element and call its navigationIntent method directly
-			const app = document.querySelector("ledger-button-app") as HTMLElement & {
-				navigationIntent?: (intent: string, params?: unknown, mode?: string) => void;
-			};
-
-			if (app?.navigationIntent) {
-				app.navigationIntent("selectAccount", undefined, "panel");
-				return true;
-			}
-			return false;
-		};
-
-		// Safety-net: after the user picks an account in the SDK modal,
-		// re-sync React state in case the `accountsChanged` event didn't
-		// fire or arrived in an unexpected format.
-		const onAccountSelected = () => {
-			if (provider) {
-				syncProviderState(provider);
-			}
-		};
-		window.addEventListener(
-			"ledger-provider-account-selected",
-			onAccountSelected,
-			{ once: true },
-		);
-
-		// Try immediately
-		if (tryOpenModal()) {
-			return;
-		}
-
-		// If app not ready yet, retry after a short delay
-		if (!ledgerAppReady) {
-			const retryInterval = setInterval(() => {
-				if (tryOpenModal()) {
-					clearInterval(retryInterval);
-				}
-			}, 100);
-
-			// Stop retrying after 3 seconds
-			setTimeout(() => {
-				clearInterval(retryInterval);
-				// Clean up the one-time listener if modal never opened
-				window.removeEventListener(
-					"ledger-provider-account-selected",
-					onAccountSelected,
-				);
-				console.warn("Ledger modal could not be opened - app not ready");
-			}, 3000);
-		}
-	}, [provider, syncProviderState]);
-
 	// -----------------------------------------------------------------------
-	// ensureAccount: resolve the current account for a signing operation.
-	//
-	// Priority order:
-	//   1. eth_accounts (passive, no modal) – SDK may already have one.
-	//   2. React state `account` – set by accountsChanged / connect() / sync.
-	//      The SDK's EIP-1193 provider sometimes returns [] even after the
-	//      user selected an account via the connect-button panel, but the
-	//      accountsChanged event DID fire and updated React state.
-	//   3. eth_requestAccounts (interactive) – last resort, opens the modal.
+	// sendTransaction: sign + broadcast via RPC
 	// -----------------------------------------------------------------------
-	const ensureAccount = useCallback(
-		async (): Promise<string> => {
-			if (!provider) throw new Error("No provider available");
-
-			// 1. Passive provider check
-			try {
-				const passiveRaw = await provider.provider.request({
-					method: "eth_accounts",
-					params: [],
-				});
-				const passive = Array.isArray(passiveRaw)
-					? (passiveRaw as string[])
-					: [];
-
-				if (passive[0]) {
-					if (passive[0] !== account) setAccount(passive[0]);
-					return passive[0];
-				}
-			} catch {
-				// ignore – fall through
-			}
-
-			// 2. React state fallback (set by events / connect / sync)
-			if (account) {
-				return account;
-			}
-
-			// 3. Interactive prompt – opens account selection if needed
-			try {
-				const activeRaw = await provider.provider.request({
-					method: "eth_requestAccounts",
-					params: [],
-				});
-				const active = Array.isArray(activeRaw)
-					? (activeRaw as string[])
-					: [];
-
-				if (active[0]) {
-					setAccount(active[0]);
-
-					// Also sync chain
-					provider.provider
-						.request({ method: "eth_chainId", params: [] })
-						.then((raw: unknown) => {
-							if (typeof raw === "string")
-								setChainId(Number.parseInt(raw, 16));
-						})
-						.catch(() => {});
-
-					return active[0];
-				}
-			} catch {
-				// ignore – fall through
-			}
-
-			throw new Error("No account selected");
-		},
-		[provider, account],
-	);
-
 	const sendTransaction = useCallback(
 		async (tx: TransactionRequest): Promise<string> => {
-			const currentAccount = await ensureAccount();
+			const { dmk, sessionId } = ensureSession();
+			const currentChainId = chainId ?? DEFAULT_CHAIN_ID;
+			const chain = getChain(currentChainId);
+			const rpcUrl = getRpcUrl(currentChainId);
+
+			setDeviceActionState({
+				status: "open-app",
+				message: "Preparing transaction...",
+			});
 
 			try {
-				const txHash = (await provider!.provider.request({
-					method: "eth_sendTransaction",
-					params: [
-						{
-							from: currentAccount,
-							to: tx.to,
-							data: tx.data,
-							value: tx.value || "0x0",
-						},
-					],
-				})) as string;
+				const publicClient = createPublicClient({
+					chain,
+					transport: http(rpcUrl),
+				});
 
-				dismissLedgerModal();
+				const senderAddress = account as `0x${string}`;
+
+				// Get nonce and gas estimates
+				const [nonce, gasPrice, estimatedGas] = await Promise.all([
+					publicClient.getTransactionCount({ address: senderAddress }),
+					publicClient.getGasPrice(),
+					publicClient.estimateGas({
+						account: senderAddress,
+						to: tx.to as `0x${string}`,
+						data: tx.data as `0x${string}`,
+						value: tx.value ? BigInt(tx.value) : 0n,
+					}),
+				]);
+
+				// Build the unsigned transaction
+				const unsignedTx: TransactionSerializable = {
+					to: tx.to as `0x${string}`,
+					data: tx.data as `0x${string}`,
+					value: tx.value ? BigInt(tx.value) : 0n,
+					nonce,
+					gas: estimatedGas + (estimatedGas * 20n) / 100n, // 20% buffer
+					gasPrice,
+					chainId: currentChainId,
+					type: "legacy" as const,
+				};
+
+				// Serialize to raw bytes for the device
+				const serializedTx = serializeTransaction(unsignedTx);
+				const txBytes = hexaStringToBuffer(serializedTx);
+				if (!txBytes) {
+					throw new Error("Failed to serialize transaction");
+				}
+
+				// Build signer
+				const ethSigner = new SignerEthBuilder({
+					dmk,
+					sessionId,
+					originToken: LEDGER_API_KEY,
+				}).build();
+
+				// Sign transaction on device
+				const { observable: signObservable } = ethSigner.signTransaction(
+					derivationPathRef.current,
+					txBytes,
+					{ skipOpenApp: false },
+				);
+
+				const signature = await observeDeviceAction(signObservable, "Transaction");
+
+				// Reconstruct signed transaction
+				const r = signature.r.startsWith("0x") ? signature.r : `0x${signature.r}`;
+				const s = signature.s.startsWith("0x") ? signature.s : `0x${signature.s}`;
+
+				const signedTx = serializeTransaction(unsignedTx, {
+					r: r as `0x${string}`,
+					s: s as `0x${string}`,
+					v: BigInt(signature.v),
+				});
+
+				// Broadcast via RPC
+				setDeviceActionState({
+					status: "success",
+					message: "Broadcasting transaction...",
+				});
+
+				const txHash = await publicClient.sendRawTransaction({
+					serializedTransaction: signedTx,
+				});
+
+				setDeviceActionState({
+					status: "success",
+					message: "Transaction broadcast successfully",
+				});
+				setTimeout(() => setDeviceActionState(null), 2000);
+
 				return txHash;
 			} catch (err) {
-				dismissLedgerModal();
-				throw err;
+				const errorObj = err instanceof Error ? err : new Error("Transaction failed");
+				// Don't override device action state if it was already set by observeDeviceAction
+				if (!deviceActionState || deviceActionState.status !== "error") {
+					setDeviceActionState({
+						status: "error",
+						message: errorObj.message,
+						error: errorObj,
+					});
+				}
+				throw errorObj;
 			}
 		},
-		[provider, ensureAccount],
+		[account, chainId, ensureSession, observeDeviceAction, deviceActionState],
 	);
 
+	// -----------------------------------------------------------------------
+	// signTypedDataV4: sign EIP-712 typed data
+	// -----------------------------------------------------------------------
 	const signTypedDataV4 = useCallback(
 		async (typedData: unknown): Promise<string> => {
-			const currentAccount = await ensureAccount();
+			const { dmk, sessionId } = ensureSession();
+
+			setDeviceActionState({
+				status: "open-app",
+				message: "Preparing to sign typed data...",
+			});
 
 			try {
-				const signature = (await provider!.provider.request({
-					method: "eth_signTypedData_v4",
-					params: [currentAccount, JSON.stringify(typedData)],
-				})) as string;
+				// Parse the typed data if it's a string
+				const parsed: TypedData =
+					typeof typedData === "string" ? JSON.parse(typedData) : (typedData as TypedData);
 
-				dismissLedgerModal();
-				return signature;
+				// Build signer
+				const ethSigner = new SignerEthBuilder({
+					dmk,
+					sessionId,
+					originToken: LEDGER_API_KEY,
+				}).build();
+
+				// Sign typed data on device
+				const { observable: signObservable } = ethSigner.signTypedData(
+					derivationPathRef.current,
+					parsed,
+					{ skipOpenApp: false },
+				);
+
+				const signature = await observeDeviceAction(signObservable, "Typed data signing");
+
+				return signatureToHex(signature);
 			} catch (err) {
-				dismissLedgerModal();
-				throw err;
+				const errorObj = err instanceof Error ? err : new Error("Typed data signing failed");
+				if (!deviceActionState || deviceActionState.status !== "error") {
+					setDeviceActionState({
+						status: "error",
+						message: errorObj.message,
+						error: errorObj,
+					});
+				}
+				throw errorObj;
 			}
 		},
-		[provider, ensureAccount],
+		[ensureSession, observeDeviceAction, deviceActionState],
 	);
 
+	// -----------------------------------------------------------------------
+	// personalSign: sign a personal message (EIP-191)
+	// -----------------------------------------------------------------------
 	const personalSign = useCallback(
 		async (message: string): Promise<string> => {
-			const currentAccount = await ensureAccount();
+			const { dmk, sessionId } = ensureSession();
 
-			// Convert the human-readable message to a hex-encoded string for personal_sign
-			const hexMessage = `0x${Array.from(new TextEncoder().encode(message))
-				.map((b) => b.toString(16).padStart(2, "0"))
-				.join("")}`;
+			setDeviceActionState({
+				status: "open-app",
+				message: "Preparing to sign message...",
+			});
 
 			try {
-				const signature = (await provider!.provider.request({
-					method: "personal_sign",
-					params: [hexMessage, currentAccount],
-				})) as string;
+				// Build signer
+				const ethSigner = new SignerEthBuilder({
+					dmk,
+					sessionId,
+					originToken: LEDGER_API_KEY,
+				}).build();
 
-				dismissLedgerModal();
-				return signature;
+				// Sign personal message on device
+				const { observable: signObservable } = ethSigner.signMessage(
+					derivationPathRef.current,
+					message,
+					{ skipOpenApp: false },
+				);
+
+				const signature = await observeDeviceAction(signObservable, "Message signing");
+
+				return signatureToHex(signature);
 			} catch (err) {
-				dismissLedgerModal();
-				throw err;
+				const errorObj = err instanceof Error ? err : new Error("Message signing failed");
+				if (!deviceActionState || deviceActionState.status !== "error") {
+					setDeviceActionState({
+						status: "error",
+						message: errorObj.message,
+						error: errorObj,
+					});
+				}
+				throw errorObj;
 			}
 		},
-		[provider, ensureAccount],
+		[ensureSession, observeDeviceAction, deviceActionState],
 	);
 
-	// Memoize the context value to prevent unnecessary re-renders of consumers
+	// -----------------------------------------------------------------------
+	// openLedgerModal: show the connect dialog
+	// -----------------------------------------------------------------------
+	const openLedgerModal = useCallback(() => {
+		setShowConnectDialog(true);
+	}, []);
+
+	// -----------------------------------------------------------------------
+	// Context value
+	// -----------------------------------------------------------------------
 	const contextValue = useMemo(
 		() => ({
 			account,
@@ -500,6 +718,9 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			signTypedDataV4,
 			personalSign,
 			openLedgerModal,
+			deviceActionState,
+			setShowConnectDialog,
+			showConnectDialog,
 		}),
 		[
 			account,
@@ -512,14 +733,12 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			signTypedDataV4,
 			personalSign,
 			openLedgerModal,
+			deviceActionState,
+			showConnectDialog,
 		],
 	);
 
-	return (
-		<LedgerContext.Provider value={contextValue}>
-			{children}
-		</LedgerContext.Provider>
-	);
+	return <LedgerContext.Provider value={contextValue}>{children}</LedgerContext.Provider>;
 }
 
 export function useLedger() {
