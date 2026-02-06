@@ -8,12 +8,14 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"typecheck": "tsc --noEmit",
-		"db:migrate": "psql $POSTGRES_URL_NON_POOLING -f db/migrations/001_initial_schema.sql"
+		"db:migrate": "psql $POSTGRES_URL_NON_POOLING -f db/migrations/001_initial_schema.sql",
+		"test:intent:x402": "node scripts/test-intent-x402-credential.js"
 	},
 	"dependencies": {
 		"@agent-intents/shared": "workspace:*",
 		"@vercel/node": "^5.5.28",
 		"@vercel/postgres": "^0.10.0",
+		"@ledgerhq/device-trusted-app-kit-ledger-keyring-protocol": "0.3.0",
 		"@ledgerhq/ledger-wallet-provider": "workspace:*",
 		"@ledgerhq/lumen-design-core": "^0.0.46",
 		"@ledgerhq/lumen-ui-react": "^0.0.76",

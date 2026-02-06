@@ -28,6 +28,7 @@ interface LedgerContextType {
 	disconnect: () => void;
 	sendTransaction: (tx: TransactionRequest) => Promise<string>;
 	signTypedDataV4: (typedData: unknown) => Promise<string>;
+	personalSign: (message: string) => Promise<string>;
 	openLedgerModal: () => void;
 }
 
@@ -37,6 +38,58 @@ const LedgerContext = createContext<LedgerContextType | null>(null);
 let ledgerInitialized = false;
 let ledgerCleanupFn: (() => void) | undefined;
 let ledgerAppReady = false;
+
+/**
+ * Dismiss the Ledger SDK overlay modal (success, rejection, or error).
+ *
+ * The modal (`<ledger-core-modal>`) can live in the top-level document OR
+ * inside the shadow DOM of another Ledger web-component. We search both
+ * locations, try clicking the close button, and ultimately remove the
+ * element from the DOM so the user is never stuck on a frozen overlay.
+ *
+ * Multiple attempts with staggered delays handle cases where the SDK
+ * creates or re-renders the modal asynchronously.
+ */
+function dismissLedgerModal(): void {
+	const nuke = () => {
+		// 1. Top-level document
+		for (const modal of document.querySelectorAll("ledger-core-modal")) {
+			tryCloseOrRemove(modal as HTMLElement);
+		}
+
+		// 2. Inside shadow roots of known Ledger custom elements
+		const hosts = document.querySelectorAll(
+			"ledger-button-app, ledger-button-provider, ledger-button",
+		);
+		for (const host of hosts) {
+			if (host.shadowRoot) {
+				for (const modal of host.shadowRoot.querySelectorAll(
+					"ledger-core-modal",
+				)) {
+					tryCloseOrRemove(modal as HTMLElement);
+				}
+			}
+		}
+	};
+
+	// Fire immediately and at staggered intervals to catch async re-renders
+	nuke();
+	setTimeout(nuke, 150);
+	setTimeout(nuke, 400);
+	setTimeout(nuke, 800);
+}
+
+/** Try to click the close button inside a modal's shadow root, then remove it. */
+function tryCloseOrRemove(modal: HTMLElement): void {
+	if (modal.shadowRoot) {
+		const closeBtn = modal.shadowRoot.querySelector<HTMLElement>(
+			"button, [data-dismiss], .close-button, [aria-label='Close']",
+		);
+		closeBtn?.click();
+	}
+	// Always remove – the click may not work if the SDK's handlers are broken
+	modal.remove();
+}
 
 export function LedgerProvider({ children }: { children: ReactNode }) {
 	const [provider, setProvider] = useState<EIP6963ProviderDetail | null>(null);
@@ -50,6 +103,30 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 
 	const useStubDAppConfig =
 		import.meta.env.VITE_LEDGER_STUB_DAPP_CONFIG === "true";
+
+	// Helper: query the provider for current account & chain and update React state.
+	// Uses eth_accounts (passive, never opens a modal) and eth_chainId.
+	const syncProviderState = useCallback(
+		(p: EIP6963ProviderDetail) => {
+			p.provider
+				.request({ method: "eth_accounts", params: [] })
+				.then((raw: unknown) => {
+					const accounts = Array.isArray(raw) ? (raw as string[]) : [];
+					setAccount(accounts[0] || null);
+				})
+				.catch(() => {});
+
+			p.provider
+				.request({ method: "eth_chainId", params: [] })
+				.then((raw: unknown) => {
+					if (typeof raw === "string") {
+						setChainId(Number.parseInt(raw, 16));
+					}
+				})
+				.catch(() => {});
+		},
+		[],
+	);
 
 	// Initialize Ledger Button Provider
 	useEffect(() => {
@@ -65,6 +142,11 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				if (providerUuidRef.current !== detail.info.uuid) {
 					providerUuidRef.current = detail.info.uuid;
 					setProvider(detail);
+
+					// Immediately try to recover existing account/chain from the SDK.
+					// Uses eth_accounts (passive, no modal) so a page refresh won't
+					// prompt the user unnecessarily.
+					syncProviderState(detail);
 				}
 			}
 		};
@@ -124,13 +206,19 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			// across HMR and React Strict Mode double-mounting.
 			// The button will be cleaned up when the page is unloaded.
 		};
-	}, [useStubDAppConfig]);
+	}, [useStubDAppConfig, syncProviderState]);
 
 	// Listen for account/chain changes
 	useEffect(() => {
 		if (!provider?.provider.on) return;
 
-		const handleAccountsChanged = (accounts: unknown) => {
+		// The Ledger Button SDK dispatches DOM CustomEvents on its HTMLElement
+		// provider. Depending on whether `on()` unwraps the event, the callback
+		// may receive the payload directly (EventEmitter style) or as a
+		// CustomEvent whose `.detail` holds the payload. Handle both.
+		const handleAccountsChanged = (accountsOrEvent: unknown) => {
+			const accounts =
+				(accountsOrEvent as CustomEvent)?.detail ?? accountsOrEvent;
 			if (!Array.isArray(accounts)) {
 				setAccount(null);
 				return;
@@ -138,8 +226,14 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			setAccount((accounts[0] as string | undefined) || null);
 		};
 
-		const handleChainChanged = (chainIdHex: unknown) => {
-			setChainId(Number.parseInt(chainIdHex as string, 16));
+		const handleChainChanged = (chainIdOrEvent: unknown) => {
+			const raw =
+				(chainIdOrEvent as CustomEvent)?.detail ?? chainIdOrEvent;
+			if (typeof raw === "string") {
+				setChainId(Number.parseInt(raw, 16));
+			} else if (typeof raw === "number") {
+				setChainId(raw);
+			}
 		};
 
 		provider.provider.on("accountsChanged", handleAccountsChanged);
@@ -209,6 +303,20 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			return false;
 		};
 
+		// Safety-net: after the user picks an account in the SDK modal,
+		// re-sync React state in case the `accountsChanged` event didn't
+		// fire or arrived in an unexpected format.
+		const onAccountSelected = () => {
+			if (provider) {
+				syncProviderState(provider);
+			}
+		};
+		window.addEventListener(
+			"ledger-provider-account-selected",
+			onAccountSelected,
+			{ once: true },
+		);
+
 		// Try immediately
 		if (tryOpenModal()) {
 			return;
@@ -225,46 +333,157 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			// Stop retrying after 3 seconds
 			setTimeout(() => {
 				clearInterval(retryInterval);
+				// Clean up the one-time listener if modal never opened
+				window.removeEventListener(
+					"ledger-provider-account-selected",
+					onAccountSelected,
+				);
 				console.warn("Ledger modal could not be opened - app not ready");
 			}, 3000);
 		}
-	}, []);
+	}, [provider, syncProviderState]);
 
-	const sendTransaction = useCallback(
-		async (tx: TransactionRequest): Promise<string> => {
+	// -----------------------------------------------------------------------
+	// ensureAccount: resolve the current account for a signing operation.
+	//
+	// Priority order:
+	//   1. eth_accounts (passive, no modal) – SDK may already have one.
+	//   2. React state `account` – set by accountsChanged / connect() / sync.
+	//      The SDK's EIP-1193 provider sometimes returns [] even after the
+	//      user selected an account via the connect-button panel, but the
+	//      accountsChanged event DID fire and updated React state.
+	//   3. eth_requestAccounts (interactive) – last resort, opens the modal.
+	// -----------------------------------------------------------------------
+	const ensureAccount = useCallback(
+		async (): Promise<string> => {
 			if (!provider) throw new Error("No provider available");
-			if (!account) throw new Error("Not connected");
 
-			const txHash = (await provider.provider.request({
-				method: "eth_sendTransaction",
-				params: [
-					{
-						from: account,
-						to: tx.to,
-						data: tx.data,
-						value: tx.value || "0x0",
-					},
-				],
-			})) as string;
+			// 1. Passive provider check
+			try {
+				const passiveRaw = await provider.provider.request({
+					method: "eth_accounts",
+					params: [],
+				});
+				const passive = Array.isArray(passiveRaw)
+					? (passiveRaw as string[])
+					: [];
 
-			return txHash;
+				if (passive[0]) {
+					if (passive[0] !== account) setAccount(passive[0]);
+					return passive[0];
+				}
+			} catch {
+				// ignore – fall through
+			}
+
+			// 2. React state fallback (set by events / connect / sync)
+			if (account) {
+				return account;
+			}
+
+			// 3. Interactive prompt – opens account selection if needed
+			try {
+				const activeRaw = await provider.provider.request({
+					method: "eth_requestAccounts",
+					params: [],
+				});
+				const active = Array.isArray(activeRaw)
+					? (activeRaw as string[])
+					: [];
+
+				if (active[0]) {
+					setAccount(active[0]);
+
+					// Also sync chain
+					provider.provider
+						.request({ method: "eth_chainId", params: [] })
+						.then((raw: unknown) => {
+							if (typeof raw === "string")
+								setChainId(Number.parseInt(raw, 16));
+						})
+						.catch(() => {});
+
+					return active[0];
+				}
+			} catch {
+				// ignore – fall through
+			}
+
+			throw new Error("No account selected");
 		},
 		[provider, account],
 	);
 
+	const sendTransaction = useCallback(
+		async (tx: TransactionRequest): Promise<string> => {
+			const currentAccount = await ensureAccount();
+
+			try {
+				const txHash = (await provider!.provider.request({
+					method: "eth_sendTransaction",
+					params: [
+						{
+							from: currentAccount,
+							to: tx.to,
+							data: tx.data,
+							value: tx.value || "0x0",
+						},
+					],
+				})) as string;
+
+				dismissLedgerModal();
+				return txHash;
+			} catch (err) {
+				dismissLedgerModal();
+				throw err;
+			}
+		},
+		[provider, ensureAccount],
+	);
+
 	const signTypedDataV4 = useCallback(
 		async (typedData: unknown): Promise<string> => {
-			if (!provider) throw new Error("No provider available");
-			if (!account) throw new Error("Not connected");
+			const currentAccount = await ensureAccount();
 
-			const signature = (await provider.provider.request({
-				method: "eth_signTypedData_v4",
-				params: [account, JSON.stringify(typedData)],
-			})) as string;
+			try {
+				const signature = (await provider!.provider.request({
+					method: "eth_signTypedData_v4",
+					params: [currentAccount, JSON.stringify(typedData)],
+				})) as string;
 
-			return signature;
+				dismissLedgerModal();
+				return signature;
+			} catch (err) {
+				dismissLedgerModal();
+				throw err;
+			}
 		},
-		[provider, account],
+		[provider, ensureAccount],
+	);
+
+	const personalSign = useCallback(
+		async (message: string): Promise<string> => {
+			const currentAccount = await ensureAccount();
+
+			// Convert the human-readable message to a hex-encoded string for personal_sign
+			const hexMessage = `0x${Array.from(new TextEncoder().encode(message))
+				.map((b) => b.toString(16).padStart(2, "0"))
+				.join("")}`;
+
+			try {
+				const signature = (await provider!.provider.request({
+					method: "personal_sign",
+					params: [hexMessage, currentAccount],
+				})) as string;
+
+				dismissLedgerModal();
+				return signature;
+			} catch (err) {
+				dismissLedgerModal();
+				throw err;
+			}
+		},
+		[provider, ensureAccount],
 	);
 
 	// Memoize the context value to prevent unnecessary re-renders of consumers
@@ -279,6 +498,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			disconnect,
 			sendTransaction,
 			signTypedDataV4,
+			personalSign,
 			openLedgerModal,
 		}),
 		[
@@ -290,6 +510,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 			disconnect,
 			sendTransaction,
 			signTypedDataV4,
+			personalSign,
 			openLedgerModal,
 		],
 	);

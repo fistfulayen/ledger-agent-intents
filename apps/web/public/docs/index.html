@@ -113,6 +113,9 @@
 			.m-patch {
 				color: var(--warn);
 			}
+			.m-delete {
+				color: var(--bad);
+			}
 			pre {
 				margin: 12px 0 0;
 				padding: 12px;
@@ -200,6 +203,17 @@
 					<div class="endpoint" style="margin-top: 10px">
 						<div class="method m-get">GET</div>
 						<div>
+							<div><span class="k">/api/intents?userId=...</span></div>
+							<div class="small">
+								List intents for a user. Optional query: <span class="k">status</span>,
+								<span class="k">limit</span>.
+							</div>
+						</div>
+					</div>
+
+					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-get">GET</div>
+						<div>
 							<div><span class="k">/api/intents/:id</span></div>
 							<div class="small">Get an intent by ID.</div>
 						</div>
@@ -214,6 +228,16 @@
 					</div>
 
 					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-post">POST</div>
+						<div>
+							<div><span class="k">/api/intents/status</span></div>
+							<div class="small">
+								Update intent status (preferred static route; signing app).
+							</div>
+						</div>
+					</div>
+
+					<div class="endpoint" style="margin-top: 10px">
 						<div class="method m-get">GET</div>
 						<div>
 							<div><span class="k">/api/users/:userId/intents</span></div>
@@ -221,6 +245,48 @@
 								List intents for a user. Optional query: <span class="k">status</span>,
 								<span class="k">limit</span>.
 							</div>
+						</div>
+					</div>
+
+					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-post">POST</div>
+						<div>
+							<div><span class="k">/api/agents/register</span></div>
+							<div class="small">Register a new agent public key under a trustchain identity.</div>
+						</div>
+					</div>
+
+					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-get">GET</div>
+						<div>
+							<div><span class="k">/api/agents?trustchainId=...</span></div>
+							<div class="small">List agents for a trustchain.</div>
+						</div>
+					</div>
+
+					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-get">GET</div>
+						<div>
+							<div><span class="k">/api/agents/:id</span></div>
+							<div class="small">Get agent by ID.</div>
+						</div>
+					</div>
+
+					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-post">POST</div>
+						<div>
+							<div><span class="k">/api/agents/revoke</span></div>
+							<div class="small">
+								Revoke an agent (preferred static route).
+							</div>
+						</div>
+					</div>
+
+					<div class="endpoint" style="margin-top: 10px">
+						<div class="method m-delete">DELETE</div>
+						<div>
+							<div><span class="k">/api/agents/:id</span></div>
+							<div class="small">Legacy alternative: revoke an agent via DELETE.</div>
 						</div>
 					</div>
 
@@ -239,6 +305,10 @@
 					<ul>
 						<li>
 							Prefer <span class="k">/openapi.json</span> for machine-readable docs.
+						</li>
+						<li>
+							Agents can authenticate with <span class="k">Authorization: AgentAuth ...</span>
+							(see <span class="k">/openapi.json</span> for the exact format).
 						</li>
 						<li>
 							This <span class="k">/docs</span> page is static HTML (no JavaScript

@@ -306,20 +306,30 @@ function DocsPage() {
 				<Section id="authentication" title="Authentication">
 					<div className="p-16 rounded-md bg-interactive/10">
 						<p className="body-2 text-interactive">
-							<strong>Hackathon Mode:</strong> No authentication required. Pass a{" "}
-							<code className="bg-interactive/20 px-4 py-2 rounded-xs">
-								userId
-							</code>{" "}
-							in the request body to identify the user.
+							<strong>Two modes are supported:</strong>
 						</p>
+						<ul className="body-2 text-interactive mt-8 space-y-4">
+							<li>
+								<strong>AgentAuth (preferred):</strong> send{" "}
+								<code className="bg-interactive/20 px-4 py-2 rounded-xs">
+									Authorization: AgentAuth &lt;timestamp&gt;.&lt;bodyHash&gt;.&lt;signature&gt;
+								</code>{" "}
+								(using your registered agent key). In this mode, the intent is tied to your
+								trustchain and any <code className="bg-interactive/20 px-4 py-2 rounded-xs">userId</code>{" "}
+								in the body is ignored.
+							</li>
+							<li>
+								<strong>Legacy/demo:</strong> no auth required. You may pass{" "}
+								<code className="bg-interactive/20 px-4 py-2 rounded-xs">userId</code>{" "}
+								in the body (defaults to <code className="bg-interactive/20 px-4 py-2 rounded-xs">demo-user</code>).
+							</li>
+						</ul>
 					</div>
 					<p className="body-1 text-base">
-						In production, agents would authenticate via API keys or OAuth. For
-						the hackathon, simply include your{" "}
-						<code className="bg-muted px-4 py-2 rounded-xs text-accent">
-							userId
-						</code>{" "}
-						in requests.
+						AgentAuth signatures must be recent (within ~5 minutes). For{" "}
+						<code className="bg-muted px-4 py-2 rounded-xs text-accent">GET</code>{" "}
+						requests, the <code className="bg-muted px-4 py-2 rounded-xs text-accent">bodyHash</code>{" "}
+						is <code className="bg-muted px-4 py-2 rounded-xs text-accent">0x</code>.
 					</p>
 				</Section>
 
@@ -342,14 +352,12 @@ function DocsPage() {
 							<Param
 								name="agentName"
 								type="string"
-								required
-								description="Human-readable display name (e.g., 'Inspector Clouseau')"
+								description="Human-readable display name (defaults to agentId if omitted)"
 							/>
 							<Param
 								name="userId"
 								type="string"
-								required
-								description="The user ID whose intents this is for"
+								description="Legacy/demo: optional; defaults to 'demo-user'. When using AgentAuth, this field is ignored."
 							/>
 							<Param
 								name="details"
@@ -546,23 +554,42 @@ function DocsPage() {
 				<Section id="list-intents" title="List Intents">
 					<Endpoint
 						method="GET"
+						path="/api/intents"
+						description="List intents for a user via query parameters (recommended for tools)."
+					/>
+					<Endpoint
+						method="GET"
 						path="/api/users/:userId/intents"
-						description="List all intents for a specific user, optionally filtered by status."
+						description="List intents for a user via path parameter (equivalent to /api/intents?userId=...)."
 					/>
 
 					<Subsection id="list-intents-params" title="Query Parameters">
 						<div className="rounded-lg p-16 bg-[#0d1117]">
 							<Param
+								name="userId"
+								type="string"
+								required
+								description="Required for /api/intents. (For /api/users/:userId/intents this is provided in the path.)"
+							/>
+							<Param
 								name="status"
 								type="string"
 								description="Filter by status: 'pending' | 'approved' | 'signed' | 'authorized' | 'confirmed' | 'rejected' | 'failed' | 'expired'"
+							/>
+							<Param
+								name="limit"
+								type="number"
+								description="Max number of intents to return (1–100, default: 50)"
 							/>
 						</div>
 					</Subsection>
 
 					<Subsection id="list-intents-example" title="Example">
-						<CodeBlock language="bash" title="List Pending Intents">
-{`curl "https://your-api-url.com/api/users/ian/intents?status=pending"`}
+						<CodeBlock language="bash" title="List Pending Intents (query style)">
+{`curl "https://your-api-url.com/api/intents?userId=ian&status=pending&limit=50"`}
+						</CodeBlock>
+						<CodeBlock language="bash" title="List Pending Intents (path style)">
+{`curl "https://your-api-url.com/api/users/ian/intents?status=pending&limit=50"`}
 						</CodeBlock>
 					</Subsection>
 				</Section>
@@ -570,9 +597,14 @@ function DocsPage() {
 				{/* API Reference: Update Status */}
 				<Section id="update-status" title="Update Status">
 					<Endpoint
+						method="POST"
+						path="/api/intents/status"
+						description="Update intent status using a static route (preferred; avoids Vercel dynamic-route issues)."
+					/>
+					<Endpoint
 						method="PATCH"
 						path="/api/intents/:id/status"
-						description="Update the status of an intent (typically called by the signing app, not agents)."
+						description="Legacy alternative: update the status of an intent (typically called by the signing app, not agents)."
 					/>
 					<div className="p-16 rounded-md bg-warning/10">
 						<p className="body-2 text-warning">
@@ -580,6 +612,68 @@ function DocsPage() {
 							application. Agents should only poll status, not update it.
 						</p>
 					</div>
+				</Section>
+
+				{/* API Reference: Agents */}
+				<Section id="agents" title="Agents">
+					<p className="body-1 text-base">
+						Register an agent public key under a trustchain identity, then use AgentAuth to
+						authenticate calls like <code className="bg-muted px-4 py-2 rounded-xs text-accent">POST /api/intents</code>.
+					</p>
+
+					<Endpoint
+						method="POST"
+						path="/api/agents/register"
+						description="Register a new agent public key under a trustchain identity."
+					/>
+					<Subsection id="register-agent-body" title="Request Body">
+						<div className="rounded-lg p-16 bg-[#0d1117]">
+							<Param
+								name="trustChainId"
+								type="string"
+								required
+								description="Trustchain identity (wallet address from the Ledger device)"
+							/>
+							<Param
+								name="agentPublicKey"
+								type="string"
+								required
+								description="0x-prefixed hex-encoded secp256k1 compressed public key"
+							/>
+							<Param
+								name="agentLabel"
+								type="string"
+								description="Optional human-readable label"
+							/>
+							<Param
+								name="authorizationSignature"
+								type="string"
+								required
+								description="EIP-191 personal_sign signature proving device authorization"
+							/>
+						</div>
+					</Subsection>
+
+					<Endpoint
+						method="GET"
+						path="/api/agents?trustchainId=..."
+						description="List all agents (including revoked) for a trustchain."
+					/>
+					<Endpoint
+						method="GET"
+						path="/api/agents/:id"
+						description="Get agent details by member ID."
+					/>
+					<Endpoint
+						method="POST"
+						path="/api/agents/revoke"
+						description="Revoke an agent using a static route (preferred; avoids Vercel dynamic-route issues)."
+					/>
+					<Endpoint
+						method="DELETE"
+						path="/api/agents/:id"
+						description="Legacy alternative: revoke an agent via DELETE."
+					/>
 				</Section>
 
 				{/* CLI Skill */}
@@ -733,6 +827,7 @@ done`}
   | "approved"    // Human approved, ready to sign
   | "rejected"    // Human rejected
   | "signed"      // Signed on device, broadcasting
+  | "authorized"  // x402 payment authorized (optional)
   | "confirmed"   // Transaction confirmed on-chain
   | "failed"      // Transaction failed
   | "expired";    // Intent expired without action`}

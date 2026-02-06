@@ -54,12 +54,11 @@ export function intentsQueryOptions(userId: string, status?: IntentStatus) {
 	return queryOptions({
 		queryKey: ["intents", userId, status] as const,
 		queryFn: async (): Promise<Intent[]> => {
-			const params = new URLSearchParams();
+			const params = new URLSearchParams({ userId });
 			if (status) {
 				params.set("status", status);
 			}
-			const queryString = params.toString();
-			const url = `${API_BASE}/api/users/${userId}/intents${queryString ? `?${queryString}` : ""}`;
+			const url = `${API_BASE}/api/intents?${params.toString()}`;
 
 			const data = await fetchJson<{ success: boolean; intents: Intent[] }>(url);
 			return data.intents;
@@ -118,12 +117,12 @@ export function useUpdateIntentStatus() {
 			paymentSignatureHeader,
 			paymentPayload,
 		}: UpdateIntentStatusParams): Promise<Intent> => {
-			const url = `${API_BASE}/api/intents/${id}/status`;
+			const url = `${API_BASE}/api/intents/status`;
 			const res = await fetch(url, {
-				method: "PATCH",
+				method: "POST",
 				credentials: "include",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ status, txHash, note, paymentSignatureHeader, paymentPayload }),
+				body: JSON.stringify({ id, status, txHash, note, paymentSignatureHeader, paymentPayload }),
 			});
 
 			if (!res.ok) {
