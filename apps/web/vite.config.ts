@@ -64,12 +64,14 @@ export default defineConfig(({ command }) => ({
 		},
 	},
 	server: {
-		proxy: {
-			"/api": {
-				target: process.env.BACKEND_URL || "http://localhost:3005",
-				changeOrigin: true,
-			},
-		},
+		proxy: process.env.BACKEND_URL
+			? {
+					"/api": {
+						target: process.env.BACKEND_URL,
+						changeOrigin: true,
+					},
+				}
+			: undefined,
 	},
 	// Optimize deps - exclude workspace packages in dev mode
 	optimizeDeps: {

@@ -282,10 +282,25 @@ GET /api/intents/:id
 #### List User Intents
 
 ```http
+GET /api/intents?userId=:userId&status=pending&limit=50
+```
+
+```http
 GET /api/users/:userId/intents?status=pending&limit=50
 ```
 
 #### Update Intent Status
+
+```http
+POST /api/intents/status
+Content-Type: application/json
+
+{
+  "id": "int_...",
+  "status": "signed",
+  "txHash": "0x..."
+}
+```
 
 ```http
 PATCH /api/intents/:id/status
@@ -308,7 +323,8 @@ Content-Type: application/json
 {
   "trustChainId": "0xabc...def",
   "agentLabel": "My Trading Bot",
-  "agentPublicKey": "0x..."
+  "agentPublicKey": "0x...",
+  "authorizationSignature": "0x..."
 }
 ```
 
@@ -319,6 +335,15 @@ GET /api/agents?trustchainId=0xabc...def
 ```
 
 #### Revoke Agent
+
+```http
+POST /api/agents/revoke
+Content-Type: application/json
+
+{
+  "id": "uuid"
+}
+```
 
 ```http
 DELETE /api/agents/:id

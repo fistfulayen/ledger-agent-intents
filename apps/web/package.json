@@ -8,7 +8,8 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"typecheck": "tsc --noEmit",
-		"db:migrate": "psql $POSTGRES_URL_NON_POOLING -f db/migrations/001_initial_schema.sql"
+		"db:migrate": "psql $POSTGRES_URL_NON_POOLING -f db/migrations/001_initial_schema.sql",
+		"test:intent:x402": "node scripts/test-intent-x402-credential.js"
 	},
 	"dependencies": {
 		"@agent-intents/shared": "workspace:*",

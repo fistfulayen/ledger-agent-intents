@@ -117,6 +117,32 @@ app.get("/api/intents/:id", (req, res) => {
 	res.json({ success: true, intent });
 });
 
+// List intents for a user (used by the Live App)
+// Mirrors the Vercel serverless function: GET /api/intents?userId=...&status=...&limit=...
+app.get("/api/intents", (req, res) => {
+	const userId = req.query.userId as string | undefined;
+
+	if (!userId) {
+		res.status(400).json({ success: false, error: "Missing required query parameter: userId" });
+		return;
+	}
+
+	const status = req.query.status as IntentStatus | undefined;
+	const limitParam = req.query.limit as string | undefined;
+	const parsedLimit = limitParam ? Number.parseInt(limitParam, 10) : 50;
+	const limit = Number.isFinite(parsedLimit)
+		? Math.min(100, Math.max(1, parsedLimit))
+		: 50;
+
+	const userIntents = Array.from(intents.values())
+		.filter((i) => i.userId === userId)
+		.filter((i) => !status || i.status === status)
+		.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+		.slice(0, limit);
+
+	res.json({ success: true, intents: userIntents });
+});
+
 // ============ Live App API ============
 
 // Get pending intents for a user

@@ -13,6 +13,7 @@
     { "name": "Health" },
     { "name": "Intents" },
     { "name": "Users" },
+    { "name": "Auth", "description": "Session-based auth (currently disabled) and compatibility endpoints" },
     { "name": "Agents", "description": "Agent provisioning and management" }
   ],
   "paths": {
@@ -33,6 +34,30 @@
       }
     },
     "/api/intents": {
+      "get": {
+        "tags": ["Intents"],
+        "summary": "List intents for a user",
+        "description": "List intents for a user via query parameters. Equivalent to GET /api/users/{userId}/intents.",
+        "parameters": [
+          { "name": "userId", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/IntentStatus" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IntentListResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      },
       "post": {
         "tags": ["Intents"],
         "summary": "Create an intent",
@@ -169,6 +194,35 @@
         }
       }
     },
+    "/api/intents/status": {
+      "post": {
+        "tags": ["Intents"],
+        "summary": "Update intent status (by body id)",
+        "description": "Update the status of an intent. This static path exists to avoid Vercel routing issues with dynamic PATCH routes. Typically called by the signing app, not agents.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateIntentStatusByIdRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/IntentResponse" } } }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "Not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
     "/api/agents/register": {
       "post": {
         "tags": ["Agents"],
@@ -272,6 +326,31 @@
         }
       }
     },
+    "/api/agents/revoke": {
+      "post": {
+        "tags": ["Agents"],
+        "summary": "Revoke an agent (by body id)",
+        "description": "Revoke an agent using a static POST route (avoids Vercel routing issues with DELETE on dynamic routes).",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RevokeAgentRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent revoked",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AgentResponse" } } }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "Agent not found or already revoked",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
     "/api/users/{userId}/intents": {
       "get": {
         "tags": ["Users"],
@@ -312,6 +391,65 @@
                 "schema": { "$ref": "#/components/schemas/ErrorResponse" }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Get current wallet (compat)",
+        "description": "Compatibility endpoint. Session auth is disabled; provide `wallet` query param to receive it back lowercased.",
+        "parameters": [
+          { "name": "wallet", "in": "query", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MeResponse" } } }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/challenge": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Issue wallet auth challenge (disabled)",
+        "description": "Wallet-based session auth is intentionally disabled.",
+        "responses": {
+          "501": {
+            "description": "Not implemented",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/verify": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Verify wallet auth (disabled)",
+        "description": "Wallet-based session auth is intentionally disabled.",
+        "responses": {
+          "501": {
+            "description": "Not implemented",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Logout",
+        "description": "Clears the `ai_session` cookie (if present).",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LogoutResponse" } } }
           }
         }
       }
@@ -450,6 +588,19 @@
           "settlementReceipt": { "type": "object", "additionalProperties": true }
         }
       },
+      "UpdateIntentStatusByIdRequest": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": { "type": "string", "description": "Intent ID" },
+          "status": { "$ref": "#/components/schemas/IntentStatus" },
+          "txHash": { "type": "string" },
+          "note": { "type": "string" },
+          "paymentSignatureHeader": { "type": "string", "description": "x402: base64-encoded payment signature header value" },
+          "paymentPayload": { "type": "object", "additionalProperties": true },
+          "settlementReceipt": { "type": "object", "additionalProperties": true }
+        }
+      },
       "RegisterAgentRequest": {
         "type": "object",
         "required": ["trustChainId", "agentPublicKey", "authorizationSignature"],
@@ -458,6 +609,29 @@
           "agentLabel": { "type": "string", "description": "Human-readable label (e.g., 'My Trading Bot')" },
           "agentPublicKey": { "type": "string", "description": "Hex-encoded secp256k1 compressed public key generated by LKRP NobleCryptoService" },
           "authorizationSignature": { "type": "string", "description": "EIP-191 personal_sign signature from the Ledger device authorizing this agent key. The signed message is: 'Authorize agent key for Ledger Agent Payments\\nKey: <pubkey>\\nLabel: <label>\\nIdentity: <trustchainId>'" }
+        }
+      },
+      "RevokeAgentRequest": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "description": "Agent member ID" }
+        }
+      },
+      "MeResponse": {
+        "type": "object",
+        "required": ["success", "walletAddress"],
+        "properties": {
+          "success": { "type": "boolean", "const": true },
+          "walletAddress": { "type": "string" }
+        }
+      },
+      "LogoutResponse": {
+        "type": "object",
+        "required": ["success", "ok"],
+        "properties": {
+          "success": { "type": "boolean", "const": true },
+          "ok": { "type": "boolean", "const": true }
         }
       },
       "TrustchainMember": {

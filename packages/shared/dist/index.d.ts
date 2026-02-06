@@ -122,6 +122,8 @@ export interface Intent {
     details: TransferIntent;
     urgency: IntentUrgency;
     status: IntentStatus;
+    trustChainId?: string;
+    createdByMemberId?: string;
     createdAt: string;
     expiresAt?: string;
     reviewedAt?: string;
@@ -134,6 +136,31 @@ export interface Intent {
         timestamp: string;
         note?: string;
     }>;
+}
+export type TrustchainMemberRole = "agent_write_only" | "full_access";
+/** A provisioned agent registered under a user's Trustchain identity. */
+export interface TrustchainMember {
+    id: string;
+    trustchainId: string;
+    memberPubkey: string;
+    role: TrustchainMemberRole;
+    label: string | null;
+    createdAt: string;
+    revokedAt: string | null;
+}
+/** Request body for POST /api/agents/register */
+export interface RegisterAgentRequest {
+    trustChainId: string;
+    agentLabel: string;
+    agentPublicKey: string;
+    /** EIP-191 personal_sign signature authorizing this agent key, signed on the Ledger device */
+    authorizationSignature: string;
+}
+/** Response from POST /api/agents/register */
+export interface RegisterAgentResponse {
+    success: boolean;
+    member?: TrustchainMember;
+    error?: string;
 }
 export interface CreateIntentRequest {
     agentId: string;
