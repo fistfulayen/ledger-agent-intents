@@ -122,8 +122,12 @@ const LedgerContext = createContext<LedgerContextType | null>(null);
 
 let dmkInstance: DeviceManagementKit | null = null;
 
-/** Ledger API key used as the origin token for clear-signing support. */
-const LEDGER_API_KEY: string = import.meta.env.VITE_LEDGER_API_KEY ?? "";
+/**
+ * DMK clear-signing API calls are proxied through /api/ledger-proxy/*
+ * so the real Ledger API key is never sent to the browser.
+ * The origin token here is left empty; the proxy injects it server-side.
+ */
+const LEDGER_API_KEY = "";
 
 function getDmk(): DeviceManagementKit {
 	if (!dmkInstance) {
@@ -406,10 +410,16 @@ function buildEthSigner(dmk: DeviceManagementKit, sessionId: DeviceSessionId) {
 	const loggerFactory = dmk.getLoggerFactory();
 	const datasourceConfig: ContextModuleDatasourceConfig = { proxy: "safe" };
 
+	// Proxy DMK API calls through our backend so the Ledger API key stays server-side
+	const proxyBase = window.location.origin;
+
 	const contextModule = new ContextModuleBuilder({
 		originToken: LEDGER_API_KEY,
 		loggerFactory,
 	})
+		.setCalConfig({ url: `${proxyBase}/api/ledger-proxy/cal`, mode: "prod", branch: "main" })
+		.setWeb3ChecksConfig({ url: `${proxyBase}/api/ledger-proxy/web3checks` })
+		.setMetadataServiceConfig({ url: `${proxyBase}/api/ledger-proxy/metadata` })
 		.setDatasourceConfig(datasourceConfig)
 		.build();
 
