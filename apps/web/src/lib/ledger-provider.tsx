@@ -475,6 +475,23 @@ function humanizeError(error: unknown): string {
 		return "The Ethereum app is not open on your device. Please open it.";
 	}
 
+	// --- On-chain / RPC errors ---
+	const errStr = error instanceof Error ? error.message : String(error);
+	if (errStr.includes("transfer amount exceeds balance")) {
+		return "Insufficient token balance. The wallet does not hold enough tokens for this transfer.";
+	}
+	if (errStr.includes("insufficient funds")) {
+		return "Insufficient funds. The wallet does not have enough ETH to cover gas fees.";
+	}
+	if (errStr.includes("execution reverted")) {
+		// Extract the revert reason if present (e.g. "execution reverted: SomeReason")
+		const reasonMatch = errStr.match(/execution reverted:\s*(.+?)(?:\n|$)/);
+		const reason = reasonMatch?.[1]?.trim();
+		return reason
+			? `Transaction would fail on-chain: ${reason}`
+			: "Transaction would fail on-chain. Please verify the parameters.";
+	}
+
 	// --- Fallback: check serialised string for locked keywords ---
 	if (looksLikeLocked(error)) {
 		return "Your Ledger device is locked. Please unlock it.";
@@ -1365,6 +1382,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 				return txHash;
 			} catch (err) {
 				console.error("[sendTransaction] FAILED:", err);
+				const msg = humanizeError(err);
 				if (doSign) {
 					const capturedDoSign = doSign;
 					retryCallbackRef.current = async () => {
@@ -1372,20 +1390,25 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 						try {
 							await capturedDoSign();
 						} catch (retryErr) {
-							setDeviceActionState((prev) => {
-								if (prev) return prev;
-								const msg = humanizeError(retryErr);
-								return { status: "error", message: msg, error: new Error(msg) };
+							const retryMsg = humanizeError(retryErr);
+							setDeviceActionState({
+								status: "error",
+								message: retryMsg,
+								error: new Error(retryMsg),
 							});
 						}
 					};
 				}
-				setDeviceActionState((prev) => {
-					if (prev) return prev;
-					const msg = humanizeError(err);
-					return { status: "error", message: msg, error: new Error(msg) };
+				// Always transition to the error state so the modal shows
+				// the error with a Close button (instead of staying stuck
+				// on the "Preparing transaction…" spinner).
+				setDeviceActionState({
+					status: "error",
+					message: msg,
+					error: new Error(msg),
+					canRetry: !!doSign,
 				});
-				throw err instanceof Error ? err : new Error(humanizeError(err));
+				throw err instanceof Error ? err : new Error(msg);
 			}
 		},
 		[account, chainId, ensureSession, observeDeviceAction, ensureEthereumApp],
@@ -1424,6 +1447,7 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					return await doSign();
 				}
 			} catch (err) {
+				const msg = humanizeError(err);
 				retryCallbackRef.current = async () => {
 					setDeviceActionState({
 						status: "open-app",
@@ -1432,19 +1456,21 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					try {
 						await doSign();
 					} catch (retryErr) {
-						setDeviceActionState((prev) => {
-							if (prev) return prev;
-							const msg = humanizeError(retryErr);
-							return { status: "error", message: msg, error: new Error(msg) };
+						const retryMsg = humanizeError(retryErr);
+						setDeviceActionState({
+							status: "error",
+							message: retryMsg,
+							error: new Error(retryMsg),
 						});
 					}
 				};
-				setDeviceActionState((prev) => {
-					if (prev) return prev;
-					const msg = humanizeError(err);
-					return { status: "error", message: msg, error: new Error(msg) };
+				setDeviceActionState({
+					status: "error",
+					message: msg,
+					error: new Error(msg),
+					canRetry: true,
 				});
-				throw err instanceof Error ? err : new Error(humanizeError(err));
+				throw err instanceof Error ? err : new Error(msg);
 			}
 		},
 		[ensureSession, observeDeviceAction, ensureEthereumApp],
@@ -1481,25 +1507,28 @@ export function LedgerProvider({ children }: { children: ReactNode }) {
 					return await doSign();
 				}
 			} catch (err) {
+				const msg = humanizeError(err);
 				// Store retry callback so the Retry button re-sends the signing
 				retryCallbackRef.current = async () => {
 					setDeviceActionState({ status: "open-app", message: "Preparing to sign message…" });
 					try {
 						await doSign();
 					} catch (retryErr) {
-						setDeviceActionState((prev) => {
-							if (prev) return prev;
-							const msg = humanizeError(retryErr);
-							return { status: "error", message: msg, error: new Error(msg) };
+						const retryMsg = humanizeError(retryErr);
+						setDeviceActionState({
+							status: "error",
+							message: retryMsg,
+							error: new Error(retryMsg),
 						});
 					}
 				};
-				setDeviceActionState((prev) => {
-					if (prev) return prev;
-					const msg = humanizeError(err);
-					return { status: "error", message: msg, error: new Error(msg) };
+				setDeviceActionState({
+					status: "error",
+					message: msg,
+					error: new Error(msg),
+					canRetry: true,
 				});
-				throw err instanceof Error ? err : new Error(humanizeError(err));
+				throw err instanceof Error ? err : new Error(msg);
 			}
 		},
 		[ensureSession, observeDeviceAction, ensureEthereumApp],
