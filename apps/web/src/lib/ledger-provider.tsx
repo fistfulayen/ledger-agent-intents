@@ -414,18 +414,19 @@ function buildEthSigner(dmk: DeviceManagementKit, sessionId: DeviceSessionId) {
 	// never appears in the client bundle. The catch-all function at
 	// /api/ledger-proxy/[...path] injects the key server-side.
 	const proxyBase = window.location.origin;
+	const calUrl = `${proxyBase}/api/ledger-proxy/cal`;
+	const web3checksUrl = `${proxyBase}/api/ledger-proxy/web3checks`;
+	const metadataUrl = `${proxyBase}/api/ledger-proxy/metadata`;
+
+	console.info("[DMK Proxy] URLs:", { calUrl, web3checksUrl, metadataUrl });
 
 	const contextModule = new ContextModuleBuilder({
 		originToken: LEDGER_API_KEY,
 		loggerFactory,
 	})
-		.setCalConfig({
-			url: `${proxyBase}/api/ledger-proxy/cal`,
-			mode: "prod",
-			branch: "main",
-		})
-		.setWeb3ChecksConfig({ url: `${proxyBase}/api/ledger-proxy/web3checks` })
-		.setMetadataServiceConfig({ url: `${proxyBase}/api/ledger-proxy/metadata` })
+		.setCalConfig({ url: calUrl, mode: "prod", branch: "main" })
+		.setWeb3ChecksConfig({ url: web3checksUrl })
+		.setMetadataServiceConfig({ url: metadataUrl })
 		.setDatasourceConfig(datasourceConfig)
 		.build();
 
