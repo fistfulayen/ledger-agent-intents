@@ -33,8 +33,10 @@ const STRIP_HEADERS = new Set([
 	"authorization",
 	"origin",
 	"referer",
+	// We inject our own x-ledger-client-origin (API key) below.
+	// x-ledger-client-version is intentionally NOT stripped — the
+	// upstream Ledger APIs need it for versioned responses.
 	"x-ledger-client-origin",
-	"x-ledger-client-version",
 	"x-forwarded-for",
 	"x-forwarded-host",
 	"x-forwarded-proto",
@@ -99,10 +101,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 	upstreamHeaders["x-ledger-client-origin"] = LEDGER_API_KEY;
 
 	const method = req.method ?? "GET";
-	const body = method !== "GET" && method !== "HEAD" ? JSON.stringify(req.body) : undefined;
+	const hasBody = method !== "GET" && method !== "HEAD";
+	const body = hasBody ? JSON.stringify(req.body) : undefined;
+
+	// Ensure Content-Type is set for requests with a body.
+	// The original header may have been stripped or missing.
+	if (hasBody && !upstreamHeaders["content-type"]) {
+		upstreamHeaders["content-type"] = "application/json";
+	}
 
 	logger.info(
-		{ target, upstreamPath, method, hasApiKey: LEDGER_API_KEY.length > 0 },
+		{
+			target,
+			upstreamUrl: upstreamUrl.toString(),
+			method,
+			hasApiKey: LEDGER_API_KEY.length > 0,
+			hasBody,
+		},
 		"ledger-proxy",
 	);
 
