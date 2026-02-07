@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
 import { AgentIntentsLogo } from "@/components/ui";
+import type { ReactNode } from "react";
 import { Header } from "./Header";
 import { LeftNavbar } from "./LeftNavbar";
 
