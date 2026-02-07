@@ -31,6 +31,12 @@ const STRIP_REQUEST_HEADERS = new Set([
 	"transfer-encoding",
 	"cookie",
 	"authorization",
+	// Strip browser origin/referer to avoid upstream CORS/origin rejections
+	"origin",
+	"referer",
+	// Strip Ledger SDK headers — we inject the real values server-side
+	"x-ledger-client-origin",
+	"x-ledger-client-version",
 ]);
 
 /** Headers we never forward back to the client */
@@ -71,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 		}
 	}
 
-	// Build upstream request headers
+	// Build upstream request headers (only forward safe, non-conflicting headers)
 	const upstreamHeaders: Record<string, string> = {};
 	for (const [key, value] of Object.entries(req.headers)) {
 		if (STRIP_REQUEST_HEADERS.has(key.toLowerCase())) continue;
@@ -79,9 +85,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 			upstreamHeaders[key] = value;
 		}
 	}
-
-	// Inject Ledger API key
-	upstreamHeaders["X-Ledger-Client-Origin"] = LEDGER_API_KEY;
+	// Inject Ledger API key (after loop so it can't be overwritten)
+	upstreamHeaders["x-ledger-client-origin"] = LEDGER_API_KEY;
 
 	try {
 		const upstreamRes = await fetch(upstreamUrl.toString(), {
