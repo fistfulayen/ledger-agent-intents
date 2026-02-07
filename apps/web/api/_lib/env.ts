@@ -10,8 +10,6 @@ const envSchema = z.object({
 	CRON_SECRET: z.string().optional(),
 	/** Comma-separated list of allowed CORS origins. Empty or unset = allow current origin (dev). */
 	ALLOWED_ORIGINS: z.string().optional().default(""),
-	/** Ledger Developer Portal API key for DMK clear-signing proxy. */
-	LEDGER_API_KEY: z.string().optional().default(""),
 });
 
 function getEnv() {
@@ -19,7 +17,6 @@ function getEnv() {
 		POSTGRES_URL: process.env.POSTGRES_URL ?? "",
 		CRON_SECRET: process.env.CRON_SECRET,
 		ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
-		LEDGER_API_KEY: process.env.LEDGER_API_KEY,
 	};
 
 	const result = envSchema.safeParse(raw);

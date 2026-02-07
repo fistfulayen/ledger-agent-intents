@@ -18,15 +18,6 @@
 			},
 			"continue": true
 		},
-		{ "src": "/api/ledger-proxy/cal/(.*)", "dest": "/api/ledger-proxy?target=cal&path=/$1" },
-		{
-			"src": "/api/ledger-proxy/web3checks/(.*)",
-			"dest": "/api/ledger-proxy?target=web3checks&path=/$1"
-		},
-		{
-			"src": "/api/ledger-proxy/metadata/(.*)",
-			"dest": "/api/ledger-proxy?target=metadata&path=/$1"
-		},
 		{ "src": "/api/(.*)", "dest": "/api/$1" },
 		{ "handle": "filesystem" },
 		{ "src": "/(.*)", "dest": "/index.html" }
