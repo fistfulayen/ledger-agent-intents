@@ -18,6 +18,7 @@
 			},
 			"continue": true
 		},
+		{ "src": "/api/ledger-proxy/(.*)", "dest": "/api/ledger-proxy/[...path]" },
 		{ "handle": "filesystem" },
 		{ "src": "/(.*)", "dest": "/index.html" }
 	],

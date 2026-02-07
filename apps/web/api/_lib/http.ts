@@ -74,7 +74,10 @@ export function setCorsHeaders(res: VercelResponse, req?: VercelRequest) {
 		}
 	}
 	res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-	res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+	res.setHeader(
+		"Access-Control-Allow-Headers",
+		"Content-Type, Authorization, X-Ledger-Client-Origin, X-Ledger-Client-Version",
+	);
 }
 
 /**
